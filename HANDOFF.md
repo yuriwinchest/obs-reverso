@@ -16,8 +16,8 @@
 - **Pedido (Yuri):** juntar os três branches no codex/001-estudio-direto, resolver conflitos, testar, gerar instalador e enviar ao GitHub.
 - **Feito:** merges de `claude/capa-da-live-4caa5b` (be552d5), `claude/enquadramento-camera-558852` (b9dc871) e `claude/janela-adaptavel-279823` (bc8ba9b). Conflitos: imports em `electron/main.ts` (mantidos os dois) e registros (HANDOFF/arquivo histórico, refeitos a partir das entradas originais de cada branch; capa e enquadramento arquivados em `docs/handoff/2026-10.md`).
 - **Validação real (código juntado):** `tsc` ok; `npm test` 37/37; `build` ok; `qa:ui` PASS em 9 tamanhos; `check:segmentation` PASS; `smoke` PASS (inclui queda forçada do encoder); `npm run package` → `release/OBS-Reverso-Setup-0.1.0.exe`; `check:package` PASS no exe; print com câmera simulada mostra prévia grande + bloco Enquadramento.
-- **Não validado:** capa enviada a canal real (OAuth), webcam física com enquadramento, tablet/TV físicos — homologação do Yuri.
-- **Próximo passo:** Yuri reinstala o Setup e homologa capa, enquadramento e abertura da janela.
+- **Homologação:** em 2026-10-15 o Yuri reinstalou o Setup e aprovou capa, enquadramento e abertura da janela.
+- **Próximo passo:** aguardar o próximo pedido do Yuri; `origin/main` ainda está no commit inicial (atualizar só se ele pedir).
 
 ## Penúltima atualização
 
