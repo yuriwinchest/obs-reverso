@@ -16,8 +16,8 @@
 - **Pedido (Yuri):** prévia da câmera grande, ocupando toda a coluna esquerda, com as configurações na lateral.
 - **Arquivos:** `src/App.tsx` (sem título "Prepare. Aperte. Apareça."; h1 só para leitor de tela; status IA/fps na barra escura da prévia; botões de apresentação + checks numa linha), `src/styles.css` (layout de altura fixa em ≥761 px, prévia flexível, painel rola por dentro; removido teto `100vh - 455px`), `scripts/{qa-ui,smoke,check-segmentation,check-package}.mjs` (perfil isolado `--user-data-dir` em `artifacts/`).
 - **Validação real:** `npm test` 14/14; `tsc` ok; `qa:ui` PASS; `check:segmentation` PASS; prints com câmera simulada sem rolagem em 1240×640 (vídeo 652×367, antes ~300×170), 1440×900, 1920×1040, 1060×720.
-- **Riscos/pendências:** instalador ainda não regenerado com este layout; Yuri ainda não homologou. Pedidos de capa da live e enquadramento da câmera foram para sessões separadas.
-- **Próximo passo:** `npm run package`, Yuri reinstala e confere a prévia.
+- **Homologação:** Yuri reinstalou o Setup regenerado (check:package PASS) e aprovou a prévia grande em 2026-10-15. Pedidos de capa da live e enquadramento da câmera foram para sessões separadas.
+- **Próximo passo:** integrar as sessões de capa da live e enquadramento da câmera quando concluírem.
 
 ## Penúltima atualização
 
