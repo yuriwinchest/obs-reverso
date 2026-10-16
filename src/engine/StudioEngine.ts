@@ -6,6 +6,7 @@ import {
 } from "../shared/types";
 import { framingMatrix } from "./framing";
 import { computePipRect } from "./pip";
+import { computePresentationBoxes } from "./layout";
 
 function videoElement(stream: MediaStream) {
   const video = document.createElement("video");
@@ -466,7 +467,17 @@ export class StudioEngine {
     this.lastFrame = now;
     ctx.fillStyle = "#141e20";
     ctx.fillRect(0, 0, w, h);
-    if (this.screenVideo?.readyState && this.screenVideo.readyState >= 2)
+    const isSplit =
+      this.screenVideo &&
+      this.screenVideo.readyState >= 2 &&
+      this.cameraVideo &&
+      this.cameraVideo.readyState >= 2 &&
+      this.config.presentationLayout &&
+      this.config.presentationLayout !== "pip";
+
+    if (isSplit) {
+      this.background(ctx, w, h, now);
+    } else if (this.screenVideo?.readyState && this.screenVideo.readyState >= 2)
       drawCover(
         ctx,
         this.screenVideo,
@@ -558,22 +569,83 @@ export class StudioEngine {
         layerCtx.restore();
       }
       if (this.screen) {
-        const { x: px, y: py, width: pw, height: ph } = computePipRect(
-          this.config,
-          w,
-          h,
-        );
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(px, py, pw, ph, 16);
-        ctx.clip();
-        ctx.drawImage(this.layer, px, py, pw, ph);
-        ctx.restore();
-        ctx.strokeStyle = "#e8e8dc";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(px, py, pw, ph, 16);
-        ctx.stroke();
+        if (isSplit) {
+          const boxes = computePresentationBoxes(this.config, w, h);
+          // Screen container card
+          ctx.save();
+          ctx.translate(boxes.screen.x, boxes.screen.y);
+          ctx.beginPath();
+          ctx.roundRect(0, 0, boxes.screen.width, boxes.screen.height, 16);
+          ctx.fillStyle = "#0c1417";
+          ctx.fill();
+          ctx.clip();
+          drawCover(
+            ctx,
+            this.screenVideo!,
+            this.screenVideo!.videoWidth,
+            this.screenVideo!.videoHeight,
+            boxes.screen.width,
+            boxes.screen.height,
+          );
+          ctx.restore();
+          ctx.strokeStyle = "#e8e8dc";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(
+            boxes.screen.x,
+            boxes.screen.y,
+            boxes.screen.width,
+            boxes.screen.height,
+            16,
+          );
+          ctx.stroke();
+
+          // Camera container card
+          ctx.save();
+          ctx.translate(boxes.camera.x, boxes.camera.y);
+          ctx.beginPath();
+          ctx.roundRect(0, 0, boxes.camera.width, boxes.camera.height, 16);
+          ctx.fillStyle = "#141e20";
+          ctx.fill();
+          ctx.clip();
+          drawCover(
+            ctx,
+            this.layer,
+            w,
+            h,
+            boxes.camera.width,
+            boxes.camera.height,
+          );
+          ctx.restore();
+          ctx.strokeStyle = "#e8e8dc";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(
+            boxes.camera.x,
+            boxes.camera.y,
+            boxes.camera.width,
+            boxes.camera.height,
+            16,
+          );
+          ctx.stroke();
+        } else {
+          const { x: px, y: py, width: pw, height: ph } = computePipRect(
+            this.config,
+            w,
+            h,
+          );
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(px, py, pw, ph, 16);
+          ctx.clip();
+          ctx.drawImage(this.layer, px, py, pw, ph);
+          ctx.restore();
+          ctx.strokeStyle = "#e8e8dc";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(px, py, pw, ph, 16);
+          ctx.stroke();
+        }
       } else ctx.drawImage(this.layer, 0, 0);
       if (
         this.config.background !== "original" &&

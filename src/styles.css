@@ -386,6 +386,15 @@ p {
   border-color: #aaba9b;
   color: #3a5c38;
 }
+.presentation-toggle {
+  display: inline-flex;
+  margin-left: 6px;
+  align-self: center;
+}
+.presentation-toggle button {
+  padding: 8px 12px;
+  font-size: 11px;
+}
 .readiness {
   flex: 1;
   display: flex;

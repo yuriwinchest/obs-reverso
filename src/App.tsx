@@ -512,18 +512,22 @@ export default function App() {
               width={1280}
               height={720}
               aria-label="Prévia da composição final de vídeo"
-              className={`program-canvas${canFrame ? " framable" : ""}${dragging ? " dragging" : ""}${pipHover ? " pip-hover" : ""}${pipDragging ? " pip-dragging" : ""}`}
+              className={`program-canvas${canFrame ? " framable" : ""}${dragging ? " dragging" : ""}${config.presentationLayout === "pip" && pipHover ? " pip-hover" : ""}${config.presentationLayout === "pip" && pipDragging ? " pip-dragging" : ""}`}
               title={
                 canFrame
                   ? "Arraste para mover a câmera; roda do mouse aumenta ou diminui"
-                  : metrics.screen && metrics.camera
+                  : metrics.screen && metrics.camera && config.presentationLayout === "pip"
                     ? "Clique e arraste sua câmera para qualquer lugar da tela"
                     : undefined
               }
               onPointerDown={(event) => {
                 if (event.button !== 0) return;
                 const node = event.currentTarget;
-                if (metrics.screen && metrics.camera) {
+                if (
+                  metrics.screen &&
+                  metrics.camera &&
+                  config.presentationLayout === "pip"
+                ) {
                   const pt = containPoint(
                     event.clientX,
                     event.clientY,
@@ -581,7 +585,12 @@ export default function App() {
                   });
                   return;
                 }
-                if (metrics.screen && metrics.camera && !framingDrag.current) {
+                if (
+                  metrics.screen &&
+                  metrics.camera &&
+                  config.presentationLayout === "pip" &&
+                  !framingDrag.current
+                ) {
                   const pt = containPoint(
                     event.clientX,
                     event.clientY,
@@ -621,7 +630,11 @@ export default function App() {
               }}
               onDoubleClick={(event) => {
                 const node = event.currentTarget;
-                if (metrics.screen && metrics.camera) {
+                if (
+                  metrics.screen &&
+                  metrics.camera &&
+                  config.presentationLayout === "pip"
+                ) {
                   const pt = containPoint(
                     event.clientX,
                     event.clientY,
@@ -733,6 +746,42 @@ export default function App() {
                 {metrics.screen && <Check size={14} />}
               </button>
             </div>
+            {metrics.screen && metrics.camera && (
+              <div
+                className="presentation-toggle"
+                role="radiogroup"
+                aria-label="Modo de divisão da tela"
+              >
+                <button
+                  type="button"
+                  className={config.presentationLayout === "pip" ? "active" : ""}
+                  onClick={() => update({ presentationLayout: "pip" })}
+                  title="Câmera flutuante sobre a tela"
+                >
+                  Sobreposta
+                </button>
+                <button
+                  type="button"
+                  className={
+                    config.presentationLayout === "side-by-side" ? "active" : ""
+                  }
+                  onClick={() => update({ presentationLayout: "side-by-side" })}
+                  title="Dividir as duas telas lado a lado (50/50)"
+                >
+                  Lado a lado
+                </button>
+                <button
+                  type="button"
+                  className={
+                    config.presentationLayout === "screen-focus" ? "active" : ""
+                  }
+                  onClick={() => update({ presentationLayout: "screen-focus" })}
+                  title="Tela em destaque com câmera ao lado"
+                >
+                  Foco na tela
+                </button>
+              </div>
+            )}
             <div className="readiness">
               <div>
                 <span
@@ -1082,73 +1131,122 @@ export default function App() {
                         disponibilidade no Windows.
                       </p>
                       <div className="row-between">
-                        <span className="field-label">Câmera no canto</span>
+                        <span className="field-label">Disposição das telas</span>
                         <div className="segmented">
                           <button
-                            aria-pressed={config.pipPosition === "left"}
-                            onClick={() => {
-                              const r = computePipRect(
-                                {
-                                  ...config,
-                                  pipPosition: "left",
-                                  pipX: undefined,
-                                  pipY: undefined,
-                                },
-                                1280,
-                                720,
-                              );
-                              update({
-                                pipPosition: "left",
-                                pipX: r.x / 1280,
-                                pipY: r.y / 720,
-                              });
-                            }}
+                            aria-pressed={config.presentationLayout === "pip"}
+                            onClick={() => update({ presentationLayout: "pip" })}
                           >
-                            Esquerda
+                            Sobreposta
                           </button>
                           <button
-                            aria-pressed={config.pipPosition === "right"}
-                            onClick={() => {
-                              const r = computePipRect(
-                                {
-                                  ...config,
-                                  pipPosition: "right",
-                                  pipX: undefined,
-                                  pipY: undefined,
-                                },
-                                1280,
-                                720,
-                              );
-                              update({
-                                pipPosition: "right",
-                                pipX: r.x / 1280,
-                                pipY: r.y / 720,
-                              });
-                            }}
+                            aria-pressed={config.presentationLayout === "side-by-side"}
+                            onClick={() => update({ presentationLayout: "side-by-side" })}
                           >
-                            Direita
+                            Lado a lado
+                          </button>
+                          <button
+                            aria-pressed={config.presentationLayout === "screen-focus"}
+                            onClick={() => update({ presentationLayout: "screen-focus" })}
+                          >
+                            Foco na tela
                           </button>
                         </div>
                       </div>
-                      <p className="field-help">
-                        Você também pode clicar sobre a sua câmera na prévia e
-                        arrastá-la livremente para qualquer lugar da tela.
-                      </p>
-                      <label className="range-label" htmlFor="pip-size">
-                        Tamanho da câmera{" "}
-                        <span>{Math.round(config.pipSize * 100)}%</span>
-                      </label>
-                      <input
-                        id="pip-size"
-                        type="range"
-                        min="0.15"
-                        max="0.4"
-                        step="0.01"
-                        value={config.pipSize}
-                        onChange={(e) =>
-                          update({ pipSize: Number(e.target.value) })
-                        }
-                      />
+                      {config.presentationLayout === "pip" ? (
+                        <>
+                          <div className="row-between">
+                            <span className="field-label">Câmera no canto</span>
+                            <div className="segmented">
+                              <button
+                                aria-pressed={config.pipPosition === "left"}
+                                onClick={() => {
+                                  const r = computePipRect(
+                                    {
+                                      ...config,
+                                      pipPosition: "left",
+                                      pipX: undefined,
+                                      pipY: undefined,
+                                    },
+                                    1280,
+                                    720,
+                                  );
+                                  update({
+                                    pipPosition: "left",
+                                    pipX: r.x / 1280,
+                                    pipY: r.y / 720,
+                                  });
+                                }}
+                              >
+                                Esquerda
+                              </button>
+                              <button
+                                aria-pressed={config.pipPosition === "right"}
+                                onClick={() => {
+                                  const r = computePipRect(
+                                    {
+                                      ...config,
+                                      pipPosition: "right",
+                                      pipX: undefined,
+                                      pipY: undefined,
+                                    },
+                                    1280,
+                                    720,
+                                  );
+                                  update({
+                                    pipPosition: "right",
+                                    pipX: r.x / 1280,
+                                    pipY: r.y / 720,
+                                  });
+                                }}
+                              >
+                                Direita
+                              </button>
+                            </div>
+                          </div>
+                          <p className="field-help">
+                            Você também pode clicar sobre a sua câmera na prévia e
+                            arrastá-la livremente para qualquer lugar da tela.
+                          </p>
+                          <label className="range-label" htmlFor="pip-size">
+                            Tamanho da câmera{" "}
+                            <span>{Math.round(config.pipSize * 100)}%</span>
+                          </label>
+                          <input
+                            id="pip-size"
+                            type="range"
+                            min="0.15"
+                            max="0.4"
+                            step="0.01"
+                            value={config.pipSize}
+                            onChange={(e) =>
+                              update({ pipSize: Number(e.target.value) })
+                            }
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <div className="row-between">
+                            <span className="field-label">Posição das telas</span>
+                            <button
+                              type="button"
+                              className="button secondary sm"
+                              onClick={() =>
+                                update({ swapPresentation: !config.swapPresentation })
+                              }
+                            >
+                              {config.swapPresentation
+                                ? "Inverter (Câmera à direita)"
+                                : "Inverter (Câmera à esquerda)"}
+                            </button>
+                          </div>
+                          <p className="field-help">
+                            {config.presentationLayout === "side-by-side"
+                              ? "Câmera e tela dividem o espaço igualmente lado a lado, preservando a proporção 16:9 de ambas."
+                              : "A tela ganha tamanho ampliado para focar em código/slides, mantendo a sua câmera visível ao lado."}
+                          </p>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

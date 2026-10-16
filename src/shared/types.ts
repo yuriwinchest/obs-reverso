@@ -1,4 +1,5 @@
 export type BackgroundKind = "original" | "blur" | "color" | "image" | "motion";
+export type PresentationLayout = "pip" | "side-by-side" | "screen-focus";
 export interface ProgramConfig {
   background: BackgroundKind;
   color: string;
@@ -11,6 +12,8 @@ export interface ProgramConfig {
   /** Camera offset as a fraction of the frame width/height (−0.5–0.5). */
   cameraX: number;
   cameraY: number;
+  presentationLayout: PresentationLayout;
+  swapPresentation: boolean;
   pipPosition: "left" | "right" | "custom";
   pipSize: number;
   pipX?: number;
@@ -31,6 +34,8 @@ export const defaultConfig: ProgramConfig = {
   cameraZoom: 1,
   cameraX: 0,
   cameraY: 0,
+  presentationLayout: "pip",
+  swapPresentation: false,
   pipPosition: "right",
   pipSize: 0.25,
   pipX: 0.7265625,
