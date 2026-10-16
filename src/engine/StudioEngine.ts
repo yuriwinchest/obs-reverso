@@ -4,6 +4,7 @@ import {
   type ProgramConfig,
   type Metrics,
 } from "../shared/types";
+import { framingMatrix } from "./framing";
 
 function videoElement(stream: MediaStream) {
   const video = document.createElement("video");
@@ -437,6 +438,23 @@ export class StudioEngine {
     ctx.fillRect(0, 0, w, h);
   }
   private foreground = document.createElement("canvas");
+  /** Framing goes outside the mirror, so dragging right moves the image right. */
+  private applyFraming(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const { scale, e, f } = framingMatrix(
+      {
+        zoom: this.config.cameraZoom,
+        x: this.config.cameraX,
+        y: this.config.cameraY,
+      },
+      w,
+      h,
+    );
+    ctx.transform(scale, 0, 0, scale, e, f);
+    if (this.config.mirror) {
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
+  }
   private render() {
     if (this.disposed) return;
     const now = performance.now(),
@@ -522,19 +540,19 @@ export class StudioEngine {
         fg.drawImage(this.mask!, 0, 0, w, h);
         fg.filter = "none";
         fg.globalCompositeOperation = "source-over";
+        // The mask is applied in full-frame coordinates above, so framing the
+        // cut-out afterwards keeps it aligned while the background stays put.
         layerCtx.save();
-        if (this.config.mirror) {
-          layerCtx.translate(w, 0);
-          layerCtx.scale(-1, 1);
-        }
+        this.applyFraming(layerCtx, w, h);
         layerCtx.drawImage(this.foreground, 0, 0);
         layerCtx.restore();
       } else {
+        // Opaque base so a shrunk or shifted camera never leaves holes (PiP
+        // would otherwise show the shared screen through them).
+        layerCtx.fillStyle = "#141e20";
+        layerCtx.fillRect(0, 0, w, h);
         layerCtx.save();
-        if (this.config.mirror) {
-          layerCtx.translate(w, 0);
-          layerCtx.scale(-1, 1);
-        }
+        this.applyFraming(layerCtx, w, h);
         drawCover(layerCtx, v, v.videoWidth, v.videoHeight, w, h);
         layerCtx.restore();
       }

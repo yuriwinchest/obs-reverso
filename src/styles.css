@@ -253,6 +253,13 @@ p {
   display: block;
   object-fit: contain;
 }
+.program-canvas.framable {
+  cursor: grab;
+  touch-action: none;
+}
+.program-canvas.dragging {
+  cursor: grabbing;
+}
 .preview-idle {
   position: absolute;
   inset: 39px 0 33px;
@@ -542,6 +549,15 @@ p {
 }
 .row-between .text-button {
   font-size: 9px;
+}
+.row-between .text-button:disabled {
+  color: #a3ab98;
+  cursor: default;
+}
+.framing-controls {
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px dashed #e4e7dc;
 }
 .audio-meter {
   height: 5px;
