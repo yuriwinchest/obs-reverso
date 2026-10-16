@@ -12,23 +12,22 @@
 
 ## Última atualização
 
-- **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5), sessão paralela "capa da live". Fase B.
-- **Pedido (Yuri):** colocar foto de capa (miniatura) na live do YouTube.
-- **Arquivos:** `electron/thumbnail.ts` (novo: validação por assinatura JPEG/PNG e ≤ 2 MB, nome sem caminho, mensagens de recusa, envio que nunca derruba a live), `electron/youtube.ts` (`setThumbnail` → `POST /upload/youtube/v3/thumbnails/set?videoId=`), `electron/main.ts` (IPC `thumbnail-choose`/`thumbnail-clear` com `validateSender`; bytes só no main; envio após o encoder iniciar, só no modo conta), `electron/preload.ts`, `src/shared/types.ts` (`StudioBridge` + `OutputStatus.kind "thumbnail"`; `ProgramConfig` intocado), `src/App.tsx` + `src/styles.css` (seção "Capa da transmissão" no Destino, linha "Capa" na revisão), `scripts/qa-ui.mjs`, `tests/thumbnail.test.ts`.
-- **Validação real:** `npm test` 21/21; `tsc` ok; `qa:ui` PASS; script Playwright no app Electron real (perfil isolado, diálogo simulado): arquivo GIF renomeado .png recusado, PNG mostra prévia só com o nome, remover volta ao estado inicial, modo chave mostra orientação + botão do Studio.
-- **Docs conferidas:** página oficial `thumbnails.set` (atualizada 2026-10-15) lista `youtube.force-ssl` entre os escopos; aceita JPEG/PNG até 50 MB; 403 = canal sem permissão para miniatura personalizada.
-- **Não validado:** envio real ao YouTube (homologação do Yuri com canal); que o ID do broadcast serve como `videoId` é [memória], a página não fala de lives.
-- **Riscos/pendências:** conflito previsível de merge no `HANDOFF.md` com a sessão de enquadramento; capa fica só em memória (some ao fechar o app).
-- **Próximo passo:** juntar no branch de trabalho, gerar instalador e o Yuri testa uma live privada com capa.
+- **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5), sessão orquestradora. Fase B.
+- **Pedido (Yuri):** juntar os três branches no codex/001-estudio-direto, resolver conflitos, testar, gerar instalador e enviar ao GitHub.
+- **Feito:** merges de `claude/capa-da-live-4caa5b` (be552d5), `claude/enquadramento-camera-558852` (b9dc871) e `claude/janela-adaptavel-279823` (bc8ba9b). Conflitos: imports em `electron/main.ts` (mantidos os dois) e registros (HANDOFF/arquivo histórico, refeitos a partir das entradas originais de cada branch; capa e enquadramento arquivados em `docs/handoff/2026-10.md`).
+- **Validação real (código juntado):** `tsc` ok; `npm test` 37/37; `build` ok; `qa:ui` PASS em 9 tamanhos; `check:segmentation` PASS; `smoke` PASS (inclui queda forçada do encoder); `npm run package` → `release/OBS-Reverso-Setup-0.1.0.exe`; `check:package` PASS no exe; print com câmera simulada mostra prévia grande + bloco Enquadramento.
+- **Não validado:** capa enviada a canal real (OAuth), webcam física com enquadramento, tablet/TV físicos — homologação do Yuri.
+- **Próximo passo:** Yuri reinstala o Setup e homologa capa, enquadramento e abertura da janela.
 
 ## Penúltima atualização
 
 - **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5). Fase B (homologação do Yuri).
-- **Pedido (Yuri):** prévia da câmera grande, ocupando toda a coluna esquerda, com as configurações na lateral.
-- **Arquivos:** `src/App.tsx` (sem título "Prepare. Aperte. Apareça."; h1 só para leitor de tela; status IA/fps na barra escura da prévia; botões de apresentação + checks numa linha), `src/styles.css` (layout de altura fixa em ≥761 px, prévia flexível, painel rola por dentro; removido teto `100vh - 455px`), `scripts/{qa-ui,smoke,check-segmentation,check-package}.mjs` (perfil isolado `--user-data-dir` em `artifacts/`).
-- **Validação real:** `npm test` 14/14; `tsc` ok; `qa:ui` PASS; `check:segmentation` PASS; prints com câmera simulada sem rolagem em 1240×640 (vídeo 652×367, antes ~300×170), 1440×900, 1920×1040, 1060×720.
-- **Homologação:** Yuri reinstalou o Setup regenerado (check:package PASS) e aprovou a prévia grande em 2026-10-15. Pedidos de capa da live e enquadramento da câmera foram para sessões separadas.
-- **Próximo passo:** integrar as sessões de capa da live e enquadramento da câmera quando concluírem.
+- **Pedido (Yuri):** o app deve abrir inteiro em tablet, notebook, PC e TV; estava abrindo cortado e saindo da tela.
+- **Causa:** janela fixa 1440×940 com mínimo 1060×720, maior que a área útil de notebooks e telas com escala do Windows.
+- **Arquivos:** `electron/windowBounds.ts` (novo, conta pura: ~92% da área útil centralizado, máximo 1440×940, maximiza abaixo de 1440×800, mínimo ≤ área útil, restauração validada, zoom 1,1/1,25 só a partir de 2000/2400 px), `electron/windowState.ts` (novo, lê/grava `window-state.json` no userData com debounce; arquivo ruim é ignorado), `electron/main.ts` (só a criação da janela), `tests/windowBounds.test.ts` (10 testes), `scripts/qa-ui.mjs` (6 tamanhos novos; desmaximiza e fixa a posição antes de medir; falha se a janela não assumir o tamanho pedido; print via `capturePage`). CSS sem mudança: nenhum tamanho cortou.
+- **Validação real:** `npm test` 24/24; `tsc` ok; `build` ok; `qa:ui` PASS em 1280×680, 1024×640, 960×540, 800×560, 1920×1040, 2560×1400 (zoom 1,25) e nos 3 antigos (prints `artifacts/ui-*.png`). Nesta máquina (2 monitores 1280×720 DIP, um a 150%) o app abre maximizado e inteiro; restauração exata em cada monitor; JSON corrompido, monitor removido e janela maior que a tela voltam a um tamanho que cabe.
+- **Riscos/pendências:** tablet e TV físicos não testados (homologação do Yuri). O qa:ui antigo media a janela errada sem acusar (agora falha). Mover a janela entre monitores de escala diferente faz o Windows reescalar o tamanho (comportamento do sistema). `scripts/qa-ui.mjs` também é alterado pela sessão da capa: conflito pequeno no merge.
+- **Próximo passo:** Yuri reinstala o Setup e confere a abertura no notebook, tablet e TV.
 
 ## Estado inicial
 
@@ -37,5 +36,5 @@
 
 ## Últimas entregas (mais recente primeiro)
 
-- 2026-10-15 — Capa (miniatura) da live no Destino, enviada no modo conta (Claude).
-- 2026-10-15 — Prévia da câmera ocupando toda a coluna esquerda (Claude).
+- 2026-10-15 — Capa da live, enquadramento da câmera e janela adaptável juntos; instalador novo (Claude).
+- 2026-10-15 — Janela abre inteira em qualquer tela e lembra tamanho/posição (Claude).
