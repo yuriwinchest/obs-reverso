@@ -32,6 +32,11 @@ import {
   type Framing,
 } from "./engine/framing";
 import {
+  computePipRect,
+  clampPipPosition,
+  isPointInPip,
+} from "./engine/pip";
+import {
   defaultConfig,
   emptyMetrics,
   type ProgramConfig,
@@ -77,6 +82,7 @@ export default function App() {
   const [mode, setMode] = useState<"key" | "oauth">("oauth");
   const [streamKey, setStreamKey] = useState("");
   const [liveTitle, setLiveTitle] = useState("");
+  const [liveDescription, setLiveDescription] = useState("");
   const [privacy, setPrivacy] = useState<"private" | "unlisted" | "public">(
     "private",
   );
@@ -239,6 +245,15 @@ export default function App() {
   } | null>(null);
   const framingEnabled = useRef(false);
   const [dragging, setDragging] = useState(false);
+  const [pipHover, setPipHover] = useState(false);
+  const [pipDragging, setPipDragging] = useState(false);
+  const pipDrag = useRef<{
+    pointer: number;
+    offsetX: number;
+    offsetY: number;
+    pw: number;
+    ph: number;
+  } | null>(null);
   const setFraming = (next: Framing, immediate = false) => {
     framing.current = clampFraming(next);
     const commit = () => {
@@ -353,6 +368,7 @@ export default function App() {
           mode,
           key: mode === "key" ? streamKey : undefined,
           title: liveTitle.trim(),
+          description: liveDescription.trim() || undefined,
           privacy,
         },
       );
@@ -425,11 +441,18 @@ export default function App() {
   const isCentered =
     config.cameraZoom === 1 && config.cameraX === 0 && config.cameraY === 0;
   const endDrag = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (framingDrag.current?.pointer !== event.pointerId) return;
-    framingDrag.current = null;
-    setDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (pipDrag.current?.pointer === event.pointerId) {
+      pipDrag.current = null;
+      setPipDragging(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (framingDrag.current?.pointer === event.pointerId) {
+      framingDrag.current = null;
+      setDragging(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
   const compareOriginal = () => {
     if (recording.current?.active || broadcast.current?.active) return;
@@ -489,15 +512,41 @@ export default function App() {
               width={1280}
               height={720}
               aria-label="Prévia da composição final de vídeo"
-              className={`program-canvas${canFrame ? " framable" : ""}${dragging ? " dragging" : ""}`}
+              className={`program-canvas${canFrame ? " framable" : ""}${dragging ? " dragging" : ""}${pipHover ? " pip-hover" : ""}${pipDragging ? " pip-dragging" : ""}`}
               title={
                 canFrame
                   ? "Arraste para mover a câmera; roda do mouse aumenta ou diminui"
-                  : undefined
+                  : metrics.screen && metrics.camera
+                    ? "Clique e arraste sua câmera para qualquer lugar da tela"
+                    : undefined
               }
               onPointerDown={(event) => {
-                if (!canFrame || event.button !== 0) return;
-                event.currentTarget.setPointerCapture(event.pointerId);
+                if (event.button !== 0) return;
+                const node = event.currentTarget;
+                if (metrics.screen && metrics.camera) {
+                  const pt = containPoint(
+                    event.clientX,
+                    event.clientY,
+                    node.getBoundingClientRect(),
+                    node.width,
+                    node.height,
+                  );
+                  const rect = computePipRect(config, node.width, node.height);
+                  if (isPointInPip(pt, rect)) {
+                    node.setPointerCapture(event.pointerId);
+                    pipDrag.current = {
+                      pointer: event.pointerId,
+                      offsetX: pt.x - rect.x,
+                      offsetY: pt.y - rect.y,
+                      pw: rect.width,
+                      ph: rect.height,
+                    };
+                    setPipDragging(true);
+                    return;
+                  }
+                }
+                if (!canFrame) return;
+                node.setPointerCapture(event.pointerId);
                 framingDrag.current = {
                   pointer: event.pointerId,
                   clientX: event.clientX,
@@ -507,9 +556,47 @@ export default function App() {
                 setDragging(true);
               }}
               onPointerMove={(event) => {
+                const node = event.currentTarget;
+                if (pipDrag.current?.pointer === event.pointerId) {
+                  const drag = pipDrag.current;
+                  const pt = containPoint(
+                    event.clientX,
+                    event.clientY,
+                    node.getBoundingClientRect(),
+                    node.width,
+                    node.height,
+                  );
+                  const clamped = clampPipPosition(
+                    pt.x - drag.offsetX,
+                    pt.y - drag.offsetY,
+                    drag.pw,
+                    drag.ph,
+                    node.width,
+                    node.height,
+                  );
+                  update({
+                    pipX: clamped.pipX,
+                    pipY: clamped.pipY,
+                    pipPosition: "custom",
+                  });
+                  return;
+                }
+                if (metrics.screen && metrics.camera && !framingDrag.current) {
+                  const pt = containPoint(
+                    event.clientX,
+                    event.clientY,
+                    node.getBoundingClientRect(),
+                    node.width,
+                    node.height,
+                  );
+                  const rect = computePipRect(config, node.width, node.height);
+                  const hovering = isPointInPip(pt, rect);
+                  if (hovering !== pipHover) setPipHover(hovering);
+                } else if (pipHover) {
+                  setPipHover(false);
+                }
                 const drag = framingDrag.current;
                 if (drag?.pointer !== event.pointerId) return;
-                const node = event.currentTarget;
                 const { scale } = containPoint(
                   0,
                   0,
@@ -529,7 +616,39 @@ export default function App() {
               }}
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
-              onDoubleClick={() => {
+              onPointerLeave={() => {
+                if (!pipDragging && pipHover) setPipHover(false);
+              }}
+              onDoubleClick={(event) => {
+                const node = event.currentTarget;
+                if (metrics.screen && metrics.camera) {
+                  const pt = containPoint(
+                    event.clientX,
+                    event.clientY,
+                    node.getBoundingClientRect(),
+                    node.width,
+                    node.height,
+                  );
+                  const rect = computePipRect(config, node.width, node.height);
+                  if (isPointInPip(pt, rect)) {
+                    const def = computePipRect(
+                      {
+                        ...config,
+                        pipPosition: "right",
+                        pipX: undefined,
+                        pipY: undefined,
+                      },
+                      node.width,
+                      node.height,
+                    );
+                    update({
+                      pipPosition: "right",
+                      pipX: def.x / node.width,
+                      pipY: def.y / node.height,
+                    });
+                    return;
+                  }
+                }
                 if (canFrame) setFraming(centered, true);
               }}
             />
@@ -967,18 +1086,54 @@ export default function App() {
                         <div className="segmented">
                           <button
                             aria-pressed={config.pipPosition === "left"}
-                            onClick={() => update({ pipPosition: "left" })}
+                            onClick={() => {
+                              const r = computePipRect(
+                                {
+                                  ...config,
+                                  pipPosition: "left",
+                                  pipX: undefined,
+                                  pipY: undefined,
+                                },
+                                1280,
+                                720,
+                              );
+                              update({
+                                pipPosition: "left",
+                                pipX: r.x / 1280,
+                                pipY: r.y / 720,
+                              });
+                            }}
                           >
                             Esquerda
                           </button>
                           <button
                             aria-pressed={config.pipPosition === "right"}
-                            onClick={() => update({ pipPosition: "right" })}
+                            onClick={() => {
+                              const r = computePipRect(
+                                {
+                                  ...config,
+                                  pipPosition: "right",
+                                  pipX: undefined,
+                                  pipY: undefined,
+                                },
+                                1280,
+                                720,
+                              );
+                              update({
+                                pipPosition: "right",
+                                pipX: r.x / 1280,
+                                pipY: r.y / 720,
+                              });
+                            }}
                           >
                             Direita
                           </button>
                         </div>
                       </div>
+                      <p className="field-help">
+                        Você também pode clicar sobre a sua câmera na prévia e
+                        arrastá-la livremente para qualquer lugar da tela.
+                      </p>
                       <label className="range-label" htmlFor="pip-size">
                         Tamanho da câmera{" "}
                         <span>{Math.round(config.pipSize * 100)}%</span>
@@ -1213,35 +1368,7 @@ export default function App() {
                     </button>
                   )}
                 </div>
-                <div className="control-group">
-                  <div className="control-heading">
-                    <span className="type-icon">T</span>
-                    <h3>Seu nome no vídeo</h3>
-                  </div>
-                  <label className="field-label" htmlFor="lower-title">
-                    Nome ou título
-                  </label>
-                  <input
-                    id="lower-title"
-                    value={config.title}
-                    maxLength={70}
-                    placeholder="Ex.: Yuri Winchester"
-                    onChange={(e) => update({ title: e.target.value })}
-                  />
-                  <label className="field-label" htmlFor="subtitle">
-                    Complemento
-                  </label>
-                  <input
-                    id="subtitle"
-                    value={config.subtitle}
-                    maxLength={100}
-                    placeholder="Ex.: Tecnologia sem complicar"
-                    onChange={(e) => update({ subtitle: e.target.value })}
-                  />
-                  <p className="field-help">
-                    Aparece na composição. Deixe vazio para remover.
-                  </p>
-                </div>
+
                 <div className="tip-card">
                   <span>UM TOQUE DE ESTÚDIO</span>
                   <p>
@@ -1361,6 +1488,19 @@ export default function App() {
                       disabled={liveActive || livePending}
                       onChange={(e) => setLiveTitle(e.target.value)}
                       placeholder="Sobre o que vamos conversar?"
+                    />
+                    <label className="field-label" htmlFor="live-description">
+                      Descrição da transmissão (opcional)
+                    </label>
+                    <textarea
+                      id="live-description"
+                      maxLength={5000}
+                      rows={3}
+                      value={liveDescription}
+                      disabled={liveActive || livePending}
+                      onChange={(e) => setLiveDescription(e.target.value)}
+                      placeholder="Detalhes ou recados que aparecerão no YouTube"
+                      className="field-textarea"
                     />
                     <label className="field-label" htmlFor="privacy">
                       Visibilidade
@@ -1761,6 +1901,12 @@ export default function App() {
                         : "Definido no YouTube Studio"}
                     </dd>
                   </div>
+                  {mode === "oauth" && liveDescription.trim() && (
+                    <div>
+                      <dt>Descrição</dt>
+                      <dd>{liveDescription.trim()}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt>Visibilidade</dt>
                     <dd>

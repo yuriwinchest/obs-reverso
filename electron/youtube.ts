@@ -325,13 +325,18 @@ export class YouTube {
       );
     return response.status === 204 ? {} : response.json();
   }
-  async prepare(title: string, privacy: "private" | "unlisted" | "public") {
+  async prepare(
+    title: string,
+    privacy: "private" | "unlisted" | "public",
+    description?: string,
+  ) {
     if (
       !title.trim() ||
       title.length > 100 ||
-      !["private", "unlisted", "public"].includes(privacy)
+      !["private", "unlisted", "public"].includes(privacy) ||
+      (typeof description === "string" && description.length > 5000)
     )
-      throw new Error("Revise título e privacidade da transmissão.");
+      throw new Error("Revise título, descrição e privacidade da transmissão.");
     let streamId: string | undefined;
     let broadcastId: string | undefined;
     try {
@@ -350,6 +355,9 @@ export class YouTube {
         {
           snippet: {
             title: title.trim(),
+            ...(description && description.trim()
+              ? { description: description.trim() }
+              : {}),
             scheduledStartTime: new Date(Date.now() + 60000).toISOString(),
           },
           status: { privacyStatus: privacy, selfDeclaredMadeForKids: false },

@@ -5,6 +5,7 @@ import {
   type Metrics,
 } from "../shared/types";
 import { framingMatrix } from "./framing";
+import { computePipRect } from "./pip";
 
 function videoElement(stream: MediaStream) {
   const video = document.createElement("video");
@@ -557,10 +558,11 @@ export class StudioEngine {
         layerCtx.restore();
       }
       if (this.screen) {
-        const pw = w * this.config.pipSize,
-          ph = (pw * 9) / 16,
-          px = this.config.pipPosition === "right" ? w - pw - 30 : 30,
-          py = h - ph - 30;
+        const { x: px, y: py, width: pw, height: ph } = computePipRect(
+          this.config,
+          w,
+          h,
+        );
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(px, py, pw, ph, 16);
@@ -598,20 +600,7 @@ export class StudioEngine {
           });
       }
     }
-    if (this.config.title.trim()) {
-      const title = this.config.title.slice(0, 70),
-        subtitle = this.config.subtitle.slice(0, 100);
-      ctx.fillStyle = "#101c21dd";
-      ctx.fillRect(40, h - 132, w * 0.65, 92);
-      ctx.fillStyle = "#f37643";
-      ctx.fillRect(40, h - 132, 5, 92);
-      ctx.fillStyle = "#fff9eb";
-      ctx.font = "600 30px Segoe UI";
-      ctx.fillText(title, 64, h - 92, w * 0.6);
-      ctx.fillStyle = "#cbd1ce";
-      ctx.font = "21px Segoe UI";
-      ctx.fillText(subtitle, 64, h - 60, w * 0.6);
-    }
+
     if (now - this.lastStats >= 500) {
       const elapsed = (now - this.lastStats) / 1000;
       this.metrics.fps = this.frames / elapsed;

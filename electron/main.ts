@@ -315,7 +315,8 @@ app.whenReady().then(async () => {
       throw new Error("Uma transmissão já está em andamento.");
     if (!options || typeof options !== "object")
       throw new Error("Revise as opções da transmissão.");
-    const { mode, key, title, privacy } = options as Record<string, unknown>;
+    const { mode, key, title, description, privacy } =
+      options as Record<string, unknown>;
     if (mode !== "key" && mode !== "oauth")
       throw new Error("Modo de conexão inválido.");
     const cover = mode === "oauth" ? thumbnail : null;
@@ -337,12 +338,14 @@ app.whenReady().then(async () => {
       else {
         if (
           typeof title !== "string" ||
-          !["private", "unlisted", "public"].includes(String(privacy))
+          !["private", "unlisted", "public"].includes(String(privacy)) ||
+          (description !== undefined && typeof description !== "string")
         )
-          throw new Error("Revise título e privacidade.");
+          throw new Error("Revise título, descrição e privacidade.");
         prepared = await youtube.prepare(
           title,
           privacy as "private" | "unlisted" | "public",
+          description,
         );
         destination = youtubeDestination(prepared.key, prepared.address);
       }

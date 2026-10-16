@@ -11,8 +11,10 @@ export interface ProgramConfig {
   /** Camera offset as a fraction of the frame width/height (−0.5–0.5). */
   cameraX: number;
   cameraY: number;
-  pipPosition: "left" | "right";
+  pipPosition: "left" | "right" | "custom";
   pipSize: number;
+  pipX?: number;
+  pipY?: number;
   title: string;
   subtitle: string;
   micGain: number;
@@ -31,6 +33,8 @@ export const defaultConfig: ProgramConfig = {
   cameraY: 0,
   pipPosition: "right",
   pipSize: 0.25,
+  pipX: 0.7265625,
+  pipY: 0.7083333,
   title: "",
   subtitle: "",
   micGain: 1,
@@ -85,6 +89,7 @@ export interface StudioBridge {
     mode: "key" | "oauth";
     key?: string;
     title?: string;
+    description?: string;
     privacy?: "private" | "unlisted" | "public";
   }): Promise<{ id: string }>;
   broadcastAppend(id: string, seq: number, bytes: ArrayBuffer): Promise<void>;
