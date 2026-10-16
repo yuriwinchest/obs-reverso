@@ -14,6 +14,13 @@ import { readFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { Outputs, youtubeDestination } from "./outputs";
 import { YouTube } from "./youtube";
+import {
+  applyThumbnail,
+  maxThumbnailBytes,
+  thumbnailMime,
+  thumbnailName,
+  type Thumbnail,
+} from "./thumbnail";
 import type { OutputStatus } from "../src/shared/types";
 
 let window: BrowserWindow;
@@ -25,6 +32,8 @@ let canClose = false;
 let acknowledgeClose: (() => void) | null = null;
 let startingBroadcast = false;
 let broadcastStartDone: Promise<void> | null = null;
+// Cover bytes stay in the main process; the renderer only receives a preview data URL.
+let thumbnail: Thumbnail | null = null;
 let broadcastSession: {
   id: string;
   broadcastId?: string;
@@ -306,6 +315,7 @@ app.whenReady().then(async () => {
     const { mode, key, title, privacy } = options as Record<string, unknown>;
     if (mode !== "key" && mode !== "oauth")
       throw new Error("Modo de conexão inválido.");
+    const cover = mode === "oauth" ? thumbnail : null;
     startingBroadcast = true;
     let finishStart!: () => void;
     broadcastStartDone = new Promise<void>((resolve) => {
@@ -345,6 +355,18 @@ app.whenReady().then(async () => {
           : {}),
         live: false,
       };
+      if (prepared && cover) {
+        const current = broadcastSession;
+        // Runs beside the encoder: a refused cover must never stop the live.
+        void applyThumbnail(
+          youtube,
+          prepared.broadcastId,
+          cover,
+          (ok, message) =>
+            emit({ kind: "thumbnail", state: ok ? "idle" : "error", message }),
+          () => broadcastSession === current,
+        );
+      }
       return result;
     } catch (error) {
       if (prepared)
@@ -402,6 +424,35 @@ app.whenReady().then(async () => {
     return youtube.disconnect();
   });
   handle("youtube-status", () => youtube.status());
+  handle("thumbnail-choose", async () => {
+    if (startingBroadcast || broadcastSession)
+      throw new Error("Encerre a transmissão antes de trocar a capa.");
+    const choice = await dialog.showOpenDialog(window, {
+      title: "Capa da transmissão",
+      filters: [
+        { name: "Imagem JPG ou PNG", extensions: ["jpg", "jpeg", "png"] },
+      ],
+      properties: ["openFile"],
+    });
+    if (choice.canceled || !choice.filePaths[0]) return null;
+    const file = choice.filePaths[0];
+    if ((await stat(file)).size > maxThumbnailBytes)
+      throw new Error("A capa precisa ter até 2 MB.");
+    const bytes = await readFile(file);
+    const mime = thumbnailMime(bytes);
+    if (startingBroadcast || broadcastSession)
+      throw new Error("Encerre a transmissão antes de trocar a capa.");
+    thumbnail = { name: thumbnailName(file), bytes, mime };
+    return {
+      name: thumbnail.name,
+      preview: `data:${mime};base64,${bytes.toString("base64")}`,
+    };
+  });
+  handle("thumbnail-clear", () => {
+    if (startingBroadcast || broadcastSession)
+      throw new Error("Encerre a transmissão antes de remover a capa.");
+    thumbnail = null;
+  });
   handle("finish-close", () => {
     acknowledgeClose?.();
   });

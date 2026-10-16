@@ -3,6 +3,11 @@ import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type { YouTubeStatus } from "../src/shared/types";
+import {
+  ThumbnailRefused,
+  thumbnailRefusal,
+  type ThumbnailMime,
+} from "./thumbnail";
 type Credentials = { clientId: string; clientSecret: string };
 type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number };
 type Security = {
@@ -385,6 +390,30 @@ export class YouTube {
         ).catch(() => undefined);
       throw error;
     }
+  }
+  async setThumbnail(videoId: string, bytes: Buffer, mime: ThumbnailMime) {
+    const accessToken = await this.accessToken();
+    let response: Response;
+    try {
+      response = await fetch(
+        `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${encodeURIComponent(videoId)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": mime,
+          },
+          body: new Uint8Array(bytes),
+          signal: AbortSignal.timeout(30000),
+        },
+      );
+    } catch {
+      throw new ThumbnailRefused(
+        "O YouTube não respondeu ao envio da capa. A live continua; defina a capa no YouTube Studio.",
+      );
+    }
+    if (!response.ok)
+      throw new ThumbnailRefused(thumbnailRefusal(response.status));
   }
   async ingestActive(streamId: string) {
     const data = await this.api(
