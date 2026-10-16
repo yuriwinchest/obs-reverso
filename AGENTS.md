@@ -14,6 +14,7 @@ devem ser lidos na ordem que o projeto determinar.
 ## Registro obrigatório de alterações
 
 - Toda alteração (código, configuração, script, documentação ou memória) deve ser registrada no `HANDOFF.md` antes de encerrar a tarefa.
+- Sempre ao final de qualquer ajuste concluído e validado, realizar o commit e push para o repositório remoto no Git.
 - Cada entrada informa: data, **autor** (quem executou), pedido, arquivos alterados, validação real, riscos/pendências e próximo passo.
 - Identifique-se pelo nome do agente que executou (Cline, Codex/Tony, Gemini, GPT, Yuri...). Nunca assine por outro agente nem registre trabalho que não foi feito.
 - Anexos técnicos ficam em `docs/` e são referenciados pela entrada de memória.
