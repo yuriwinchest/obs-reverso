@@ -13,20 +13,20 @@
 ## Última atualização
 
 - **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5). Fase B (homologação do Yuri).
+- **Pedido (Yuri):** mover a imagem da câmera para cima e para baixo e aumentar/diminuir.
+- **Arquivos:** `src/shared/types.ts` (`cameraZoom` 0,5–2, `cameraX`/`cameraY` −0,5–0,5), `src/engine/framing.ts` (novo: matriz, limites, zoom no ponto do cursor, mapeamento object-fit), `src/engine/StudioEngine.ts` (`applyFraming` fora do espelho; fundo virtual fixo, só o recorte se move; fundo Original com base escura), `src/App.tsx` (Fontes → Câmera → Enquadramento: Tamanho, Horizontal, Vertical, Centralizar; na prévia arrastar, roda do mouse e dois cliques), `src/styles.css`, `tests/framing.test.ts`, `scripts/check-framing.mjs` + `npm run check:framing`.
+- **Validação real:** `npm test` 20/20; `tsc` ok; `qa:ui` PASS; `check:segmentation` PASS; `check:framing` PASS (câmera simulada do Chromium, perfil isolado): sobra escura no fundo Original, arrastar 128 px → +13%/+8%, roda → 143%, dois cliques centralizam; fundo Dinâmico com máscara **sintética** (elipse, o vídeo falso não tem pessoa) fica fixo e o recorte se desloca. Prints em `artifacts/framing-*.png`.
+- **Não validado:** webcam física e pessoa real; câmera no canto (tela compartilhada) não testada em print, só pelo caminho de código; enquadramento não é salvo entre aberturas do app (nenhuma configuração é).
+- **Próximo passo:** `npm run package`, Yuri reinstala e homologa com a câmera dele.
+
+## Penúltima atualização
+
+- **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5). Fase B (homologação do Yuri).
 - **Pedido (Yuri):** prévia da câmera grande, ocupando toda a coluna esquerda, com as configurações na lateral.
 - **Arquivos:** `src/App.tsx` (sem título "Prepare. Aperte. Apareça."; h1 só para leitor de tela; status IA/fps na barra escura da prévia; botões de apresentação + checks numa linha), `src/styles.css` (layout de altura fixa em ≥761 px, prévia flexível, painel rola por dentro; removido teto `100vh - 455px`), `scripts/{qa-ui,smoke,check-segmentation,check-package}.mjs` (perfil isolado `--user-data-dir` em `artifacts/`).
 - **Validação real:** `npm test` 14/14; `tsc` ok; `qa:ui` PASS; `check:segmentation` PASS; prints com câmera simulada sem rolagem em 1240×640 (vídeo 652×367, antes ~300×170), 1440×900, 1920×1040, 1060×720.
 - **Riscos/pendências:** instalador ainda não regenerado com este layout; Yuri ainda não homologou. Pedidos de capa da live e enquadramento da câmera foram para sessões separadas.
 - **Próximo passo:** `npm run package`, Yuri reinstala e confere a prévia.
-
-## Penúltima atualização
-
-- **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5).
-- **Pedido (Yuri):** commitar e, como não havia remoto, criar repositório GitHub exclusivo para o projeto.
-- **Feito:** commit inicial `edaa869` (81 arquivos); repositório **privado** criado em https://github.com/yuriwinchest/obs-reverso como `origin`; `main` e `codex/001-estudio-direto` enviados.
-- **Validação real:** `gh repo create` concluído; varredura de nomes/conteúdo sem segredo antes do commit; `.gitignore` exclui `.env`, credenciais, `node_modules`, `release` e `artifacts`.
-- **Riscos/pendências:** instalador não vai para o Git (fica em `release/`); publicar binário exigiria GitHub Release, não feito. Homologação física continua pendente.
-- **Próximo passo:** Yuri instala o Setup e homologa câmera, fundo e gravação.
 
 ## Estado inicial
 
@@ -35,5 +35,5 @@
 
 ## Últimas entregas (mais recente primeiro)
 
+- 2026-10-15 — Enquadramento da câmera: tamanho e posição por slider, arrastar e roda (Claude).
 - 2026-10-15 — Prévia da câmera ocupando toda a coluna esquerda (Claude).
-- 2026-10-15 — Repositório privado yuriwinchest/obs-reverso criado e código enviado (Claude).

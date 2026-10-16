@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   Camera,
   Mic,
@@ -26,6 +26,12 @@ import {
 import { StudioEngine } from "./engine/StudioEngine";
 import { OutputController } from "./engine/OutputController";
 import {
+  clampFraming,
+  containPoint,
+  zoomAt,
+  type Framing,
+} from "./engine/framing";
+import {
   defaultConfig,
   emptyMetrics,
   type ProgramConfig,
@@ -39,6 +45,11 @@ const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 const isBusyState = (state: string) =>
   state === "starting" || state === "stopping";
+const centered: Framing = { zoom: 1, x: 0, y: 0 };
+const offsetText = (value: number, negative: string, positive: string) =>
+  Math.abs(value) < 0.005
+    ? "Centro"
+    : `${Math.round(Math.abs(value) * 100)}% ${value < 0 ? negative : positive}`;
 
 export default function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -205,6 +216,67 @@ export default function App() {
     setConfig((previous) => ({ ...previous, ...partial }));
     engine.current?.update(partial);
   };
+  // Latest framing, ahead of React state while a drag or wheel is coalesced.
+  const framing = useRef<Framing>({
+    zoom: defaultConfig.cameraZoom,
+    x: defaultConfig.cameraX,
+    y: defaultConfig.cameraY,
+  });
+  const framingFrame = useRef(0);
+  const framingDrag = useRef<{
+    pointer: number;
+    clientX: number;
+    clientY: number;
+    start: Framing;
+  } | null>(null);
+  const framingEnabled = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const setFraming = (next: Framing, immediate = false) => {
+    framing.current = clampFraming(next);
+    const commit = () => {
+      framingFrame.current = 0;
+      const { zoom, x, y } = framing.current;
+      update({ cameraZoom: zoom, cameraX: x, cameraY: y });
+    };
+    if (immediate) {
+      cancelAnimationFrame(framingFrame.current);
+      commit();
+    } else if (!framingFrame.current)
+      framingFrame.current = requestAnimationFrame(commit);
+  };
+  useEffect(() => {
+    const node = canvas.current;
+    if (!node) return;
+    // Native listener: React registers wheel as passive, so it cannot stop
+    // the panel from scrolling while zooming.
+    const onWheel = (event: WheelEvent) => {
+      if (!framingEnabled.current) return;
+      event.preventDefault();
+      const point = containPoint(
+        event.clientX,
+        event.clientY,
+        node.getBoundingClientRect(),
+        node.width,
+        node.height,
+      );
+      const current = framing.current;
+      setFraming(
+        zoomAt(
+          current,
+          current.zoom * Math.exp(-event.deltaY * 0.0015),
+          point.x,
+          point.y,
+          node.width,
+          node.height,
+        ),
+      );
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", onWheel);
+      cancelAnimationFrame(framingFrame.current);
+    };
+  }, []);
   async function run(name: string, task: () => Promise<unknown>) {
     if (operationLock.current.has(name)) return;
     operationLock.current.add(name);
@@ -330,6 +402,17 @@ export default function App() {
     ready: "IA local ativa",
     error: "Falha no fundo virtual",
   }[metrics.segmentation];
+  const canFrame = metrics.camera && !metrics.screen;
+  framingEnabled.current = canFrame;
+  const isCentered =
+    config.cameraZoom === 1 && config.cameraX === 0 && config.cameraY === 0;
+  const endDrag = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (framingDrag.current?.pointer !== event.pointerId) return;
+    framingDrag.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   const compareOriginal = () => {
     if (recording.current?.active || broadcast.current?.active) return;
     comparisonActive.current = true;
@@ -388,7 +471,49 @@ export default function App() {
               width={1280}
               height={720}
               aria-label="Prévia da composição final de vídeo"
-              className="program-canvas"
+              className={`program-canvas${canFrame ? " framable" : ""}${dragging ? " dragging" : ""}`}
+              title={
+                canFrame
+                  ? "Arraste para mover a câmera; roda do mouse aumenta ou diminui"
+                  : undefined
+              }
+              onPointerDown={(event) => {
+                if (!canFrame || event.button !== 0) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                framingDrag.current = {
+                  pointer: event.pointerId,
+                  clientX: event.clientX,
+                  clientY: event.clientY,
+                  start: framing.current,
+                };
+                setDragging(true);
+              }}
+              onPointerMove={(event) => {
+                const drag = framingDrag.current;
+                if (drag?.pointer !== event.pointerId) return;
+                const node = event.currentTarget;
+                const { scale } = containPoint(
+                  0,
+                  0,
+                  node.getBoundingClientRect(),
+                  node.width,
+                  node.height,
+                );
+                setFraming({
+                  zoom: drag.start.zoom,
+                  x:
+                    drag.start.x +
+                    ((event.clientX - drag.clientX) * scale) / node.width,
+                  y:
+                    drag.start.y +
+                    ((event.clientY - drag.clientY) * scale) / node.height,
+                });
+              }}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onDoubleClick={() => {
+                if (canFrame) setFraming(centered, true);
+              }}
             />
             {!metrics.camera &&
               !metrics.screen &&
@@ -598,6 +723,98 @@ export default function App() {
                     >
                       {metrics.camera ? "Desligar" : "Ativar"}
                     </button>
+                  </div>
+                  <div
+                    className="framing-controls"
+                    role="group"
+                    aria-labelledby="framing-title"
+                  >
+                    <div className="row-between">
+                      <span className="field-label" id="framing-title">
+                        Enquadramento
+                      </span>
+                      <button
+                        className="text-button"
+                        disabled={isCentered}
+                        onClick={() => setFraming(centered, true)}
+                      >
+                        Centralizar
+                      </button>
+                    </div>
+                    <label className="range-label" htmlFor="camera-zoom">
+                      Tamanho{" "}
+                      <span>{Math.round(config.cameraZoom * 100)}%</span>
+                    </label>
+                    <input
+                      id="camera-zoom"
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.01"
+                      value={config.cameraZoom}
+                      aria-valuetext={`${Math.round(config.cameraZoom * 100)}%`}
+                      onChange={(e) =>
+                        setFraming(
+                          { ...framing.current, zoom: Number(e.target.value) },
+                          true,
+                        )
+                      }
+                    />
+                    <label className="range-label" htmlFor="camera-x">
+                      Horizontal{" "}
+                      <span>
+                        {offsetText(config.cameraX, "à esquerda", "à direita")}
+                      </span>
+                    </label>
+                    <input
+                      id="camera-x"
+                      type="range"
+                      min="-0.5"
+                      max="0.5"
+                      step="0.01"
+                      value={config.cameraX}
+                      aria-valuetext={offsetText(
+                        config.cameraX,
+                        "à esquerda",
+                        "à direita",
+                      )}
+                      onChange={(e) =>
+                        setFraming(
+                          { ...framing.current, x: Number(e.target.value) },
+                          true,
+                        )
+                      }
+                    />
+                    <label className="range-label" htmlFor="camera-y">
+                      Vertical{" "}
+                      <span>
+                        {offsetText(config.cameraY, "acima", "abaixo")}
+                      </span>
+                    </label>
+                    <input
+                      id="camera-y"
+                      type="range"
+                      min="-0.5"
+                      max="0.5"
+                      step="0.01"
+                      value={config.cameraY}
+                      aria-valuetext={offsetText(
+                        config.cameraY,
+                        "acima",
+                        "abaixo",
+                      )}
+                      onChange={(e) =>
+                        setFraming(
+                          { ...framing.current, y: Number(e.target.value) },
+                          true,
+                        )
+                      }
+                    />
+                    <p className="field-help">
+                      {metrics.screen
+                        ? "Com a tela compartilhada, o enquadramento vale dentro do quadrinho da câmera."
+                        : "Na prévia: arraste para mover, use a roda do mouse para aumentar ou diminuir e dê dois cliques para centralizar."}
+                    </p>
                   </div>
                 </div>
                 <div className="control-group">

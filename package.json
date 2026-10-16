@@ -13,6 +13,7 @@
     "smoke": "node scripts/smoke.mjs",
     "package": "npm run build && electron-builder --win nsis",
     "check:segmentation": "node scripts/check-segmentation.mjs",
+    "check:framing": "node scripts/check-framing.mjs",
     "qa:ui": "node scripts/qa-ui.mjs",
     "soak": "node scripts/smoke.mjs --soak",
     "format": "prettier --write src electron scripts tests vite.config.ts",

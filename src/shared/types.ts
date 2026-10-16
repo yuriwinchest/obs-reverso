@@ -6,6 +6,11 @@ export interface ProgramConfig {
   motion: "aurora" | "studio" | "sunset";
   blur: number;
   mirror: boolean;
+  /** Scale of the camera layer inside its frame (0.5–2). */
+  cameraZoom: number;
+  /** Camera offset as a fraction of the frame width/height (−0.5–0.5). */
+  cameraX: number;
+  cameraY: number;
   pipPosition: "left" | "right";
   pipSize: number;
   title: string;
@@ -21,6 +26,9 @@ export const defaultConfig: ProgramConfig = {
   motion: "aurora",
   blur: 12,
   mirror: true,
+  cameraZoom: 1,
+  cameraX: 0,
+  cameraY: 0,
   pipPosition: "right",
   pipSize: 0.25,
   title: "",
