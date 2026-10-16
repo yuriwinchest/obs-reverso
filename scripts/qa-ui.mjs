@@ -34,13 +34,30 @@ try {
   await page.waitForFunction(
     () => window.studio && document.querySelector(".transport"),
   );
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].unmaximize(),
+  );
+  await page.waitForTimeout(800);
   for (const view of [
     { name: "1280x800", width: 1280, height: 800, zoom: 1 },
     { name: "1100x720", width: 1100, height: 720, zoom: 1 },
     { name: "1100x720-at150", width: 1650, height: 1080, zoom: 1.5 },
+    // Work areas of real screens (DIP): notebook 1366×768, 1280×800 at 125%,
+    // Full HD at 200%, tablet, PC/TV Full HD and 1440p (auto zoom 1.25).
+    { name: "1280x680-notebook", width: 1280, height: 680, zoom: 1 },
+    { name: "1024x640-at125", width: 1024, height: 640, zoom: 1 },
+    { name: "960x540-at200", width: 960, height: 540, zoom: 1 },
+    { name: "800x560-tablet", width: 800, height: 560, zoom: 1 },
+    { name: "1920x1040-fullhd", width: 1920, height: 1040, zoom: 1 },
+    { name: "2560x1400-1440p", width: 2560, height: 1400, zoom: 1.25 },
   ]) {
-    await app.evaluate(({ BrowserWindow }, size) => {
+    await app.evaluate(({ BrowserWindow, screen }, size) => {
       const window = BrowserWindow.getAllWindows()[0];
+      // Small screens open maximized, which would ignore setContentSize; a
+      // fixed origin keeps the window off monitors with another DPI scale.
+      window.unmaximize();
+      const { x, y } = screen.getPrimaryDisplay().workArea;
+      window.setPosition(x, y);
       window.webContents.setZoomFactor(size.zoom);
       window.setContentSize(size.width, size.height);
     }, view);
@@ -71,6 +88,11 @@ try {
       };
     });
     assert.ok(
+      Math.abs(geometry.width * view.zoom - view.width) <= 2 &&
+        Math.abs(geometry.height * view.zoom - view.height) <= 2,
+      `${view.name}: janela não assumiu o tamanho pedido.`,
+    );
+    assert.ok(
       geometry.documentWidth <= geometry.width + 1,
       `${view.name}: overflow horizontal.`,
     );
@@ -83,9 +105,17 @@ try {
       geometry.cameraCta.bottom < geometry.transport.y,
       `${view.name}: CTA câmera coberto pelo rodapé.`,
     );
-    await page.screenshot({
-      path: path.join(directory, `ui-${view.name}.png`),
-    });
+    // capturePage renders the whole window even when it is bigger than the
+    // monitors of the test machine, where page.screenshot clips it.
+    const png = await app.evaluate(async ({ BrowserWindow }) =>
+      (await BrowserWindow.getAllWindows()[0].webContents.capturePage())
+        .toPNG()
+        .toString("base64"),
+    );
+    await writeFile(
+      path.join(directory, `ui-${view.name}.png`),
+      Buffer.from(png, "base64"),
+    );
     result.layouts.push({ ...view, geometry });
   }
   await page.getByRole("button", { name: "Destino", exact: true }).click();
