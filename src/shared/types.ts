@@ -50,7 +50,7 @@ export const emptyMetrics: Metrics = {
   screen: false,
 };
 export interface OutputStatus {
-  kind: "recording" | "broadcast";
+  kind: "recording" | "broadcast" | "thumbnail";
   state:
     "idle" | "starting" | "sending" | "stopping" | "error" | "liveConfirmed";
   message?: string;
@@ -85,6 +85,8 @@ export interface StudioBridge {
   youtubeConnect(): Promise<YouTubeStatus>;
   youtubeDisconnect(): Promise<void>;
   youtubeStatus(): Promise<YouTubeStatus>;
+  thumbnailChoose(): Promise<{ name: string; preview: string } | null>;
+  thumbnailClear(): Promise<void>;
   openExternal(target: "youtube-studio" | "recordings"): Promise<void>;
   onStatus(callback: (status: OutputStatus) => void): () => void;
   onClosing(callback: () => void): () => void;

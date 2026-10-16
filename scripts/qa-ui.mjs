@@ -94,12 +94,32 @@ try {
     "private",
     "Visibilidade inicial deve ser privada.",
   );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Escolher capa", exact: true })
+      .count(),
+    1,
+    "Modo conta precisa oferecer a escolha da capa.",
+  );
   await page
     .getByRole("button", { name: "Chave de transmissão", exact: true })
     .click();
   assert.equal(
     await page.locator("#stream-key").getAttribute("type"),
     "password",
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Escolher capa", exact: true })
+      .count(),
+    0,
+    "Modo chave não consegue enviar capa; deve só orientar.",
+  );
+  assert.equal(
+    await page
+      .getByRole("heading", { name: "Capa da transmissão", exact: true })
+      .count(),
+    1,
   );
   await page.locator("#stream-key").fill("smoke-key-never-external");
   await page

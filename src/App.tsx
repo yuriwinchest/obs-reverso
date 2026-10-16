@@ -69,6 +69,9 @@ export default function App() {
   const [privacy, setPrivacy] = useState<"private" | "unlisted" | "public">(
     "private",
   );
+  const [cover, setCover] = useState<{ name: string; preview: string } | null>(
+    null,
+  );
   const [screenSources, setScreenSources] = useState<Source[] | null>(null);
   const [confirm, setConfirm] = useState<"start" | "stop" | null>(null);
   const [info, setInfo] = useState<{
@@ -121,6 +124,11 @@ export default function App() {
         "A integração do aplicativo não está disponível. Abra o OBS Reverso pelo iniciador do Windows.",
       );
     const unsubscribe = window.studio?.onStatus((status) => {
+      if (status.kind === "thumbnail") {
+        if (status.state === "error") setError(status.message ?? "");
+        else setNotice(status.message ?? "");
+        return;
+      }
       if (status.kind === "recording" && status.path)
         setRecordedPath(status.path);
       if (status.kind === "broadcast") setBroadcastState(status.state);
@@ -301,6 +309,16 @@ export default function App() {
         await window.studio.youtubeDisconnect();
         setYoutube(await window.studio.youtubeStatus());
       }
+    });
+  const coverAction = (action: "choose" | "clear") =>
+    run("cover", async () => {
+      if (action === "clear") {
+        await window.studio.thumbnailClear();
+        setCover(null);
+        return;
+      }
+      const chosen = await window.studio.thumbnailChoose();
+      if (chosen) setCover(chosen);
     });
   const recordingActive = ["sending", "recording", "liveConfirmed"].includes(
     recordState,
@@ -1171,21 +1189,84 @@ export default function App() {
                       placeholder="Cole a chave do YouTube Studio"
                     />
                     <p className="field-help">
-                      A chave fica apenas nesta sessão. Título e privacidade são
-                      definidos no YouTube Studio.
+                      A chave fica apenas nesta sessão.
                     </p>
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        run("external", () =>
-                          window.studio.openExternal("youtube-studio"),
-                        )
-                      }
-                    >
-                      Abrir YouTube Studio <ExternalLink size={13} />
-                    </button>
                   </div>
                 )}
+                <div className="control-group">
+                  <div className="control-heading">
+                    <ImagePlus size={17} />
+                    <h3>Capa da transmissão</h3>
+                    {mode === "oauth" && (
+                      <span className={`mini-status ${cover ? "on" : ""}`}>
+                        {cover ? "Escolhida" : "Sem capa"}
+                      </span>
+                    )}
+                  </div>
+                  {mode === "oauth" ? (
+                    <>
+                      {cover ? (
+                        <figure className="cover-preview">
+                          <img
+                            src={cover.preview}
+                            alt="Prévia da capa da transmissão"
+                          />
+                          <figcaption title={cover.name}>
+                            {cover.name}
+                          </figcaption>
+                        </figure>
+                      ) : (
+                        <p className="muted-copy">
+                          A imagem aparece como miniatura da live no YouTube.
+                        </p>
+                      )}
+                      <button
+                        className="button secondary full"
+                        disabled={
+                          busy.includes("cover") || liveActive || livePending
+                        }
+                        onClick={() => coverAction("choose")}
+                      >
+                        <ImagePlus size={16} />
+                        {cover ? "Trocar capa" : "Escolher capa"}
+                      </button>
+                      {cover && (
+                        <button
+                          className="text-button"
+                          disabled={
+                            busy.includes("cover") || liveActive || livePending
+                          }
+                          onClick={() => coverAction("clear")}
+                        >
+                          Remover capa
+                        </button>
+                      )}
+                      <p className="field-help">
+                        Recomendado 1280×720, JPG ou PNG, até 2 MB. Enviada ao
+                        YouTube quando a live começa; miniatura personalizada
+                        exige canal verificado.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="muted-copy">
+                        Com chave, o app não acessa sua conta: título,
+                        privacidade e capa ficam no YouTube Studio. Edite a
+                        transmissão lá e envie a miniatura.
+                      </p>
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          run("external", () =>
+                            window.studio.openExternal("youtube-studio"),
+                          )
+                        }
+                      >
+                        Abrir YouTube Studio <ExternalLink size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div className="control-group">
                   <div className="control-heading">
                     <FolderOpen size={17} />
@@ -1473,6 +1554,14 @@ export default function App() {
                             unlisted: "Não listada",
                             public: "Pública",
                           }[privacy]}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Capa</dt>
+                    <dd>
+                      {mode === "key"
+                        ? "Definida no YouTube Studio"
+                        : cover?.name || "Sem capa"}
                     </dd>
                   </div>
                   <div>

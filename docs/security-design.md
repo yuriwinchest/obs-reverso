@@ -10,6 +10,7 @@ Revisão pontual executada por Codex/Crowley em 15/10/2026. Escopo: ponte Electr
 - Diagnósticos do FFmpeg não chegam a logs/UI porque podem conter a URL completa. A chave não é persistida pelo aplicativo.
 - OAuth abre consentimento no navegador do sistema; callback escuta somente 127.0.0.1, porta efêmera, estado aleatório e PKCE S256. Tokens e credenciais são persistidos com Electron safeStorage; indisponibilidade do armazenamento protegido impede conexão.
 - Gravação e transmissão têm sessões e filas próprias, teto de bytes e sequência validada. O arquivo parcial é mantido quando a finalização falha.
+- Capa da live (15/10/2026, Claude): o renderer não envia bytes nem caminho. O main abre o diálogo, recusa arquivo > 2 MB antes de ler, aceita só assinatura JPEG/PNG, guarda os bytes em memória e devolve apenas nome do arquivo e data URL de prévia. Envio ao YouTube só no modo conta, em paralelo ao encoder; recusa vira aviso e não interrompe a live.
 
 ## Correções nesta revisão
 

@@ -961,6 +961,25 @@ p {
 .text-danger {
   color: #b74d39 !important;
 }
+.cover-preview {
+  margin: 0 0 10px;
+}
+.cover-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e4e9dc;
+}
+.cover-preview figcaption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  color: #8d987f;
+  margin-top: 6px;
+}
 .file-path {
   overflow-wrap: anywhere;
   font-size: 9px;
