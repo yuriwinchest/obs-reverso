@@ -20,7 +20,9 @@ const result = {
 try {
   app = await _electron.launch({
     executablePath: electron,
+    // Isolated profile: never touches the user's data or their open instance.
     args: [
+      `--user-data-dir=${path.join(root, "artifacts", "profile-check-segmentation")}`,
       root,
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",

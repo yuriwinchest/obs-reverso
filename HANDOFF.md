@@ -12,21 +12,20 @@
 
 ## Última atualização
 
+- **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5). Fase B (homologação do Yuri).
+- **Pedido (Yuri):** prévia da câmera grande, ocupando toda a coluna esquerda, com as configurações na lateral.
+- **Arquivos:** `src/App.tsx` (sem título "Prepare. Aperte. Apareça."; h1 só para leitor de tela; status IA/fps na barra escura da prévia; botões de apresentação + checks numa linha), `src/styles.css` (layout de altura fixa em ≥761 px, prévia flexível, painel rola por dentro; removido teto `100vh - 455px`), `scripts/{qa-ui,smoke,check-segmentation,check-package}.mjs` (perfil isolado `--user-data-dir` em `artifacts/`).
+- **Validação real:** `npm test` 14/14; `tsc` ok; `qa:ui` PASS; `check:segmentation` PASS; prints com câmera simulada sem rolagem em 1240×640 (vídeo 652×367, antes ~300×170), 1440×900, 1920×1040, 1060×720.
+- **Riscos/pendências:** instalador ainda não regenerado com este layout; Yuri ainda não homologou. Pedidos de capa da live e enquadramento da câmera foram para sessões separadas.
+- **Próximo passo:** `npm run package`, Yuri reinstala e confere a prévia.
+
+## Penúltima atualização
+
 - **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5).
 - **Pedido (Yuri):** commitar e, como não havia remoto, criar repositório GitHub exclusivo para o projeto.
 - **Feito:** commit inicial `edaa869` (81 arquivos); repositório **privado** criado em https://github.com/yuriwinchest/obs-reverso como `origin`; `main` e `codex/001-estudio-direto` enviados.
 - **Validação real:** `gh repo create` concluído; varredura de nomes/conteúdo sem segredo antes do commit; `.gitignore` exclui `.env`, credenciais, `node_modules`, `release` e `artifacts`.
 - **Riscos/pendências:** instalador não vai para o Git (fica em `release/`); publicar binário exigiria GitHub Release, não feito. Homologação física continua pendente.
-- **Próximo passo:** Yuri instala o Setup e homologa câmera, fundo e gravação.
-
-## Penúltima atualização
-
-- **Data/autor:** 2026-10-15, Claude (Claude Code, Opus 5.5). Fase A.
-- **Pedido (Yuri):** rodar o app, gerar executável instalável e avaliar melhorias.
-- **Arquivos:** `package.json` (alvo NSIS, ícone, versões fixas no lugar de `latest`, script `package:dir`), `package-lock.json`, `build/icon.png` (novo), `electron/main.ts` (trava de instância única), `scripts/check-package.mjs` (seletor ambíguo do microfone), `README.md`.
-- **Validação real:** `npm test` 14/14; `tsc` ok; `npm run qa:ui` PASS; `npm run package` gerou `release/OBS-Reverso-Setup-0.1.0.exe` (~135 MB, sem assinatura); `npm run check:package` PASS no exe empacotado; abrir o exe duas vezes resultou em uma janela.
-- **Não validado:** instalação do Setup na máquina (homologação do Yuri), câmera/microfone físicos, live real (T014/T015).
-- **Riscos/pendências:** SmartScreen avisará "editor desconhecido"; `docs/validacao.md` citado no README não existe; `tasks.md` com todas as caixas desmarcadas; commit inicial feito depois (ver Última atualização).
 - **Próximo passo:** Yuri instala o Setup e homologa câmera, fundo e gravação.
 
 ## Estado inicial
@@ -36,5 +35,5 @@
 
 ## Últimas entregas (mais recente primeiro)
 
+- 2026-10-15 — Prévia da câmera ocupando toda a coluna esquerda (Claude).
 - 2026-10-15 — Repositório privado yuriwinchest/obs-reverso criado e código enviado (Claude).
-- 2026-10-15 — Instalador Windows (Setup.exe), ícone, instância única e versões fixas (Claude).

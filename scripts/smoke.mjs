@@ -65,7 +65,11 @@ const result = {
 try {
   app = await _electron.launch({
     executablePath: electron,
-    args: [root],
+    // Isolated profile: never touches the user's data or their open instance.
+    args: [
+      root,
+      `--user-data-dir=${path.join(root, "artifacts", "profile-smoke")}`,
+    ],
     cwd: root,
     env: { ...process.env, OBS_REVERSO_SMOKE: "1", VITE_DEV_SERVER_URL: "" },
     timeout: 60000,
@@ -292,13 +296,11 @@ try {
       if (Math.round(elapsed) % 15 === 0 || samples.length === 0) {
         const main = await app.evaluate(({ app }) => ({
           rssBytes: process.memoryUsage().rss,
-          processes: app
-            .getAppMetrics()
-            .map((item) => ({
-              type: item.type,
-              cpuPercent: item.cpu.percentCPUUsage,
-              workingSetKiB: item.memory.workingSetSize,
-            })),
+          processes: app.getAppMetrics().map((item) => ({
+            type: item.type,
+            cpuPercent: item.cpu.percentCPUUsage,
+            workingSetKiB: item.memory.workingSetSize,
+          })),
         }));
         const renderer = await page.evaluate(() => window.__smoke.snapshot());
         samples.push({

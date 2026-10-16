@@ -21,7 +21,11 @@ let app;
 try {
   app = await _electron.launch({
     executablePath: electron,
-    args: [root],
+    // Isolated profile: never touches the user's data or their open instance.
+    args: [
+      root,
+      `--user-data-dir=${path.join(root, "artifacts", "profile-qa-ui")}`,
+    ],
     cwd: root,
     env: { ...process.env, OBS_REVERSO_SMOKE: "1", VITE_DEV_SERVER_URL: "" },
     timeout: 60000,
@@ -148,8 +152,13 @@ try {
     await page.getByRole("button", { name: "Gravar", exact: true }).waitFor();
     const statuses = await page.evaluate(() => window.__uiStatuses);
     result.recordingStatuses = statuses;
-    result.recordingUiMessage = await page.locator('.toast').innerText().catch(() => '');
-    await page.screenshot({ path: path.join(directory, 'ui-recording-status.png') });
+    result.recordingUiMessage = await page
+      .locator(".toast")
+      .innerText()
+      .catch(() => "");
+    await page.screenshot({
+      path: path.join(directory, "ui-recording-status.png"),
+    });
     assert.equal(
       statuses.some((status) => status.state === "error"),
       false,

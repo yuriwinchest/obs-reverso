@@ -18,7 +18,9 @@ let app;
 try {
   app = await _electron.launch({
     executablePath: path.join(root, "release/win-unpacked/OBS Reverso.exe"),
+    // Isolated profile: never touches the user's data or their open instance.
     args: [
+      `--user-data-dir=${path.join(root, "artifacts", "profile-check-package")}`,
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",
     ],

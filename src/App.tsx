@@ -366,15 +366,7 @@ export default function App() {
 
       <main id="studio" className="workspace">
         <section className="stage-column" aria-label="Composição do vídeo">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">01 / NO SEU CONTROLE</span>
-              <h1>Prepare. Aperte. Apareça.</h1>
-            </div>
-            <span className="local-badge">
-              <Sparkles size={13} /> Fundo processado neste PC
-            </span>
-          </div>
+          <h1 className="sr-only">Estúdio OBS Reverso</h1>
           <div className="preview-shell">
             <div className="preview-toolbar">
               <span>
@@ -427,37 +419,35 @@ export default function App() {
                 </div>
               )}
             <div className="preview-bottom">
-              <span className="preview-label">PRÉVIA DA SAÍDA</span>
-              <span>
+              <span className="preview-label">
+                PRÉVIA DA SAÍDA
                 {recordingActive && <b className="rec-indicator">● GRAVANDO</b>}
                 {liveActive && <b className="live-indicator">● ENVIANDO</b>}
               </span>
+              <span className="stage-info">
+                <span
+                  className={
+                    metrics.segmentation === "error" ? "text-danger" : ""
+                  }
+                >
+                  <span
+                    className={`status-dot ${metrics.segmentation === "ready" ? "ready" : ""}`}
+                  />
+                  {segmentationLabel}
+                </span>
+                <span className="performance">
+                  {metrics.fps > 0
+                    ? `${Math.round(metrics.fps)} fps`
+                    : "Aguardando vídeo"}
+                  {metrics.segmentation === "ready" &&
+                    ` · máscara ${Math.round(metrics.maskFps)} fps`}
+                </span>
+              </span>
             </div>
-          </div>
-          <div className="stage-info">
-            <span
-              className={metrics.segmentation === "error" ? "text-danger" : ""}
-            >
-              <span
-                className={`status-dot ${metrics.segmentation === "ready" ? "ready" : ""}`}
-              />
-              {segmentationLabel}
-            </span>
-            <span className="performance">
-              {metrics.fps > 0
-                ? `${Math.round(metrics.fps)} fps`
-                : "Aguardando vídeo"}
-              {metrics.segmentation === "ready" &&
-                ` · máscara ${Math.round(metrics.maskFps)} fps`}
-            </span>
           </div>
 
-          <div className="quick-layout">
-            <div>
-              <span className="eyebrow">APRESENTAÇÃO</span>
-              <p>Você decide o que entra no vídeo.</p>
-            </div>
-            <div className="layout-actions">
+          <div className="stage-dock">
+            <div className="layout-actions" aria-label="Apresentação">
               <button
                 className={`layout-option ${!metrics.screen ? "selected" : ""}`}
                 onClick={() => {
@@ -481,37 +471,37 @@ export default function App() {
                 {metrics.screen && <Check size={14} />}
               </button>
             </div>
-          </div>
-          <div className="readiness">
-            <div>
-              <span
-                className={`check-icon ${metrics.camera || metrics.screen ? "checked" : ""}`}
-              >
-                <Check size={13} />
-              </span>
-              <span>
-                {metrics.camera || metrics.screen
-                  ? "Vídeo pronto"
-                  : "Ative uma fonte de vídeo"}
-              </span>
+            <div className="readiness">
+              <div>
+                <span
+                  className={`check-icon ${metrics.camera || metrics.screen ? "checked" : ""}`}
+                >
+                  <Check size={13} />
+                </span>
+                <span>
+                  {metrics.camera || metrics.screen
+                    ? "Vídeo pronto"
+                    : "Ative uma fonte de vídeo"}
+                </span>
+              </div>
+              <div>
+                <span
+                  className={`check-icon ${metrics.microphone && !config.muted ? "checked" : ""}`}
+                >
+                  <Check size={13} />
+                </span>
+                <span>
+                  {metrics.microphone
+                    ? config.muted
+                      ? "Microfone silenciado"
+                      : "Microfone conectado"
+                    : "Microfone desativado"}
+                </span>
+              </div>
+              <button onClick={() => setPanel("destination")}>
+                Conferir destino <ArrowUpRight size={13} />
+              </button>
             </div>
-            <div>
-              <span
-                className={`check-icon ${metrics.microphone && !config.muted ? "checked" : ""}`}
-              >
-                <Check size={13} />
-              </span>
-              <span>
-                {metrics.microphone
-                  ? config.muted
-                    ? "Microfone silenciado"
-                    : "Microfone conectado"
-                  : "Microfone desativado"}
-              </span>
-            </div>
-            <button onClick={() => setPanel("destination")}>
-              Conferir destino <ArrowUpRight size={13} />
-            </button>
           </div>
           {metrics.microphone && !config.muted && metrics.micLevel < 0.005 && (
             <p className="quiet-hint">
