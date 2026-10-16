@@ -21,6 +21,7 @@ import {
   thumbnailName,
   type Thumbnail,
 } from "./thumbnail";
+import { initialWindowPlan, trackWindow } from "./windowState";
 import type { OutputStatus } from "../src/shared/types";
 
 let window: BrowserWindow;
@@ -184,12 +185,12 @@ app.whenReady().then(async () => {
       }, 2000);
     }
   });
+  const placement = initialWindowPlan(app.getPath("userData"));
   window = new BrowserWindow({
     title: "OBS Reverso",
-    width: 1440,
-    height: 940,
-    minWidth: 1060,
-    minHeight: 720,
+    ...placement.bounds,
+    minWidth: placement.minWidth,
+    minHeight: placement.minHeight,
     backgroundColor: "#111a18",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -200,6 +201,8 @@ app.whenReady().then(async () => {
       backgroundThrottling: false,
     },
   });
+  if (placement.maximized) window.maximize();
+  trackWindow(window, app.getPath("userData"));
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
     if (!trustedUrl(url)) event.preventDefault();
