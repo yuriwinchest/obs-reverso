@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.runtime/
+artifacts/
+public/models/*.tflite
+public/wasm/
+.env*
+*.log
+*.partial.webm
+credentials*.json
+oauth*.json
+Thumbs.db

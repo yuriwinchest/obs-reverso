@@ -1,0 +1,5 @@
+# Contratos do estúdio
+Engine (renderer): constructor(canvas,onMetrics,onError); startCamera(deviceId?), stopCamera(), startMic(deviceId?), stopMic(), startScreen(), stopScreen(), update(partial config), getStream(), destroy(). Métodos async quando obtêm permissão. config e métricas em src/shared/types.ts.
+window.studio bridge: info(), sources(), chooseScreen(id), recordingStart(), recordingAppend(id,seq,bytes), recordingStop(id), broadcastStart({key?,mode,title,privacy}), broadcastAppend(id,seq,bytes), broadcastStop(id), youtubeConnect(), youtubeDisconnect(), youtubeStatus(), youtubeConfigure(), openExternal(target), onStatus(callback). Respostas retornam payload ou rejeitam erro sanitizado.
+Saída: MediaRecorder chunks a cada 500ms; append aguardado e ordenado; 16MiB teto por sessão renderer e main. Gravação/live independentes, sem buffer da sessão inteira.
+Segurança: renderer sem fs/process/Node. Main valida URL/janela de origem e formato/tamanho/seq. RTMPS restrito YouTube. Sem URL/processo arbitrários via IPC.

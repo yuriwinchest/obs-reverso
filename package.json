@@ -1,0 +1,86 @@
+{
+  "name": "obs-reverso",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Estúdio direto para YouTube com fundo virtual local",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "assets": "node scripts/prepare-assets.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
+    "dev": "node scripts/dev.mjs",
+    "start": "electron .",
+    "test": "tsx --test tests/*.test.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "package": "npm run build && electron-builder --win nsis",
+    "check:segmentation": "node scripts/check-segmentation.mjs",
+    "qa:ui": "node scripts/qa-ui.mjs",
+    "soak": "node scripts/smoke.mjs --soak",
+    "format": "prettier --write src electron scripts tests vite.config.ts",
+    "check:package": "node scripts/check-package.mjs",
+    "package:dir": "npm run build && electron-builder --win dir"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "prettier": "^3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "@mediapipe/tasks-vision": "1.1.1",
+    "ffmpeg-static": "5.3.0",
+    "ffprobe-static": "3.1.0",
+    "lucide-react": "1.57.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "build": {
+    "appId": "br.com.yuriwinchester.obsreverso",
+    "productName": "OBS Reverso",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "THIRD-PARTY-NOTICES.md",
+      "docs/security-design.md",
+      "docs/licenses/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "ffmpeg.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png",
+      "signAndEditExecutable": true
+    },
+    "asar": true,
+    "npmRebuild": false,
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OBS Reverso",
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046",
+      "artifactName": "OBS-Reverso-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "type": "module",
+  "author": "Yuri Winchester"
+}

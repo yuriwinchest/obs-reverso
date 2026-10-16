@@ -1,0 +1,8 @@
+# Pesquisa e decisões — 2026-10-15
+- Decisão: reimplementação própria Electron/React/TS, canvas único e FFmpeg separado. Motivo: desenvolver produto funcional sem toolchain/ABI libobs. Alternativa libobs adiada por custo operacional. OBS estudado em documentação pública: https://obsproject.com/kb/quick-start-guide e https://github.com/obsproject/obs-studio . Não houve cópia de código.
+- REA 6.3.0: doctor ghidra executado, provider ausente (GHIDRA_INSTALL_DIR não configurado); OBS não encontrado nos locais convencionais. Não alegar decompilação. Caso e evidência na central engenharia-reversa.
+- MediaPipe ImageSegmenter em worker, modelo selfie 256x144 local e WASM local. API síncrona não bloqueará UI: https://developers.google.com/edge/mediapipe/solutions/vision/image_segmenter/web_js . Alternativa chroma não atende pedido; modelo pesado não cabe no objetivo hardware.
+- Transporte WebM VP8/Opus por IPC sequencial, FFmpeg H.264/AAC→RTMPS: https://ffmpeg.org/ffmpeg-protocols.html . Dupla codificação exige benchmark; limite de fila falha explicitamente, não descarta bytes.
+- OAuth desktop PKCE/state/browser sistema/loopback efêmero: https://developers.google.com/youtube/v3/live/guides/auth/installed-apps . Client desktop externo necessário. Chave manual preserva uso sem OAuth. Credenciais protegidas main; memória apenas durante sessão quando possível.
+- Electron contextIsolation/sandbox, IPC específico e validação de emissor: https://www.electronjs.org/docs/latest/tutorial/security . Sem acesso Node no renderer.
+- Hardware verificado: i5-8265U, Intel UHD 620, 17.043.968.000 bytes RAM. 720p24 inicial; alvo, não performance alegada.
