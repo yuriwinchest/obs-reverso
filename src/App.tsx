@@ -1284,9 +1284,61 @@ export default function App() {
                                 : "Inverter (Câmera à esquerda)"}
                             </button>
                           </div>
+                          {config.presentationLayout === "side-by-side" && (
+                            <>
+                              <label
+                                className="range-label"
+                                htmlFor="split-ratio"
+                              >
+                                Espaço da tela do computador{" "}
+                                <span>
+                                  {Math.round(config.splitRatio * 100)}% tela ·{" "}
+                                  {100 - Math.round(config.splitRatio * 100)}%
+                                  câmera
+                                </span>
+                              </label>
+                              <input
+                                id="split-ratio"
+                                type="range"
+                                min="0.25"
+                                max="0.8"
+                                step="0.01"
+                                value={config.splitRatio}
+                                onChange={(e) =>
+                                  update({ splitRatio: Number(e.target.value) })
+                                }
+                              />
+                              <div className="row-between">
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  onClick={() => update({ splitRatio: 0.5 })}
+                                >
+                                  Meio a meio
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  onClick={() => update({ splitRatio: 0.75 })}
+                                >
+                                  Tela grande, câmera pequena
+                                </button>
+                              </div>
+                            </>
+                          )}
+                          <label className="check-label">
+                            <input
+                              type="checkbox"
+                              checked={config.screenFill}
+                              onChange={(e) =>
+                                update({ screenFill: e.target.checked })
+                              }
+                            />{" "}
+                            Preencher o quadro da tela (corta as bordas)
+                          </label>
                           <p className="field-help">
                             {config.presentationLayout === "side-by-side"
-                              ? "Câmera e tela dividem o espaço igualmente lado a lado, preservando a proporção 16:9 de ambas."
+                              ? "Meio a meio deixa dois quadros iguais em pé, bom para live com convidado (compartilhe a janela da chamada). Arraste para dar mais espaço à tela ou à câmera."
                               : "A tela ganha tamanho ampliado para focar em código/slides, mantendo a sua câmera visível ao lado."}
                           </p>
                         </>

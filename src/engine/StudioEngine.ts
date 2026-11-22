@@ -28,6 +28,24 @@ export function coverRect(sw: number, sh: number, dw: number, dh: number) {
     h: sh * scale,
   };
 }
+function drawContain(
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  sw: number,
+  sh: number,
+  w: number,
+  h: number,
+) {
+  if (!sw || !sh) return;
+  const scale = Math.min(w / sw, h / sh);
+  ctx.drawImage(
+    source,
+    (w - sw * scale) / 2,
+    (h - sh * scale) / 2,
+    sw * scale,
+    sh * scale,
+  );
+}
 function drawCover(
   ctx: CanvasRenderingContext2D,
   source: CanvasImageSource,
@@ -670,7 +688,7 @@ export class StudioEngine {
           ctx.fillStyle = "#0c1417";
           ctx.fill();
           ctx.clip();
-          drawCover(
+          (this.config.screenFill ? drawCover : drawContain)(
             ctx,
             this.screenVideo!,
             this.screenVideo!.videoWidth,

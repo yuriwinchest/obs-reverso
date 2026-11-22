@@ -19,7 +19,7 @@ test("pip layout sets fullscreen screen and pip camera rect", () => {
   assert.equal(boxes.camera.height, 180);
 });
 
-test("side-by-side layout computes twin 16:9 boxes side by side", () => {
+test("side-by-side default gives two equal full-height panels", () => {
   const boxes = computePresentationBoxes(
     { presentationLayout: "side-by-side" },
     W,
@@ -34,9 +34,9 @@ test("side-by-side layout computes twin 16:9 boxes side by side", () => {
   assert.ok(boxes.screen.x < boxes.camera.x);
   assert.ok(boxes.camera.x >= boxes.screen.x + boxes.screen.width);
 
-  // Both should be 16:9
-  const ratio = boxes.screen.width / boxes.screen.height;
-  assert.ok(Math.abs(ratio - 16 / 9) < 0.02, `Expected ~16/9, got ${ratio}`);
+  // Full height, portrait panels
+  assert.equal(boxes.screen.height, H - 32);
+  assert.ok(boxes.screen.width < boxes.screen.height);
 
   // Both should be within canvas bounds
   assert.ok(boxes.screen.x >= 0);
@@ -77,4 +77,20 @@ test("screen-focus layout provides large 16:9 screen presentation and side camer
 
   // Fits within canvas
   assert.ok(boxes.camera.x + boxes.camera.width <= W);
+});
+
+test("side-by-side splitRatio gives more room to the screen and is clamped", () => {
+  const big = computePresentationBoxes(
+    { presentationLayout: "side-by-side", splitRatio: 0.75 },
+    W,
+    H,
+  );
+  assert.ok(big.screen.width > big.camera.width * 2.5);
+  assert.equal(big.screen.width + big.camera.width, W - 48);
+  const tooSmall = computePresentationBoxes(
+    { presentationLayout: "side-by-side", splitRatio: 0.01 },
+    W,
+    H,
+  );
+  assert.equal(tooSmall.screen.width, Math.round((W - 48) * 0.25));
 });

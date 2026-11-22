@@ -17,6 +17,7 @@ export interface PresentationBoxes {
 export interface PresentationConfig extends Partial<PipConfig> {
   presentationLayout?: PresentationLayout;
   swapPresentation?: boolean;
+  splitRatio?: number;
 }
 
 /**
@@ -26,6 +27,13 @@ export interface PresentationConfig extends Partial<PipConfig> {
  * - "side-by-side": Two balanced 16:9 boxes side by side, centered vertically.
  * - "screen-focus": Large 16:9 screen presentation box on one side with camera beside it.
  */
+export const SPLIT_MIN = 0.25;
+export const SPLIT_MAX = 0.8;
+export function clampRatio(ratio: number | undefined) {
+  if (typeof ratio !== "number" || !Number.isFinite(ratio)) return 0.5;
+  return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, ratio));
+}
+
 export function computePresentationBoxes(
   config: PresentationConfig,
   w: number,
@@ -35,24 +43,20 @@ export function computePresentationBoxes(
   const swap = !!config.swapPresentation;
 
   if (layout === "side-by-side") {
+    // Two full-height panels; the split is adjustable (0.5 = two equal
+    // portrait panels, e.g. a live with a guest).
     const margin = 16;
     const gap = 16;
-    const availableW = w - 2 * margin - gap;
-    const bw = Math.floor(availableW / 2);
-    const bh = Math.round((bw * 9) / 16);
-    const y = Math.round((h - bh) / 2);
-
-    const left: LayoutRect = { x: margin, y, width: bw, height: bh };
-    const right: LayoutRect = {
-      x: margin + bw + gap,
-      y,
-      width: bw,
-      height: bh,
-    };
-
+    const ratio = clampRatio(config.splitRatio);
+    const inner = w - 2 * margin - gap;
+    const sw = Math.round(inner * ratio);
+    const cw = inner - sw;
+    const bh = h - 2 * margin;
+    const screenX = swap ? margin + cw + gap : margin;
+    const cameraX = swap ? margin : margin + sw + gap;
     return {
-      screen: swap ? right : left,
-      camera: swap ? left : right,
+      screen: { x: screenX, y: margin, width: sw, height: bh },
+      camera: { x: cameraX, y: margin, width: cw, height: bh },
     };
   }
 

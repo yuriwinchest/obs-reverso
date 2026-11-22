@@ -14,6 +14,10 @@ export interface ProgramConfig {
   cameraY: number;
   presentationLayout: PresentationLayout;
   swapPresentation: boolean;
+  /** Side by side: fraction of the width given to the shared screen (0.25–0.8). */
+  splitRatio: number;
+  /** Split layouts: crop the shared screen to fill its panel instead of showing it whole. */
+  screenFill: boolean;
   pipPosition: "left" | "right" | "custom";
   pipSize: number;
   /** Over a shared screen, show only the cut-out person (no box, no virtual background). */
@@ -38,6 +42,8 @@ export const defaultConfig: ProgramConfig = {
   cameraY: 0,
   presentationLayout: "pip",
   swapPresentation: false,
+  splitRatio: 0.5,
+  screenFill: false,
   pipPosition: "right",
   pipSize: 0.25,
   pipCutout: true,
