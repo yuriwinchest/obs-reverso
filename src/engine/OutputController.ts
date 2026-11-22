@@ -1,4 +1,5 @@
 import type { StudioBridge } from "../shared/types";
+import { BacklogClock } from "./backlog";
 const MAX_PENDING = 16 * 1024 * 1024;
 const MIME = "video/webm;codecs=vp8,opus";
 type StartOptions = Parameters<StudioBridge["broadcastStart"]>[0];
@@ -13,7 +14,7 @@ export class OutputController {
   private stopping: Promise<void> | null = null;
   private fault = false;
   private watchdog: ReturnType<typeof setInterval> | null = null;
-  private oldestAt = 0;
+  private backlog = new BacklogClock();
   constructor(
     private kind: "recording" | "broadcast",
     private onChange: (state: string) => void,
@@ -33,7 +34,7 @@ export class OutputController {
     this.fault = false;
     this.seq = 0;
     this.pendingBytes = 0;
-    this.oldestAt = 0;
+    this.backlog.clear();
     this.queue = Promise.resolve();
     try {
       const result =
@@ -60,7 +61,7 @@ export class OutputController {
           return;
         }
         this.pendingBytes += event.data.size;
-        if (!this.oldestAt) this.oldestAt = performance.now();
+        this.backlog.add(performance.now());
         const seq = this.seq++,
           id = this.session!;
         this.queue = this.queue
@@ -80,7 +81,7 @@ export class OutputController {
           )
           .finally(() => {
             this.pendingBytes -= event.data.size;
-            if (!this.pendingBytes) this.oldestAt = 0;
+            this.backlog.done();
           });
       };
       recorder.onerror = () =>
@@ -89,7 +90,7 @@ export class OutputController {
         );
       recorder.start(500);
       this.watchdog = setInterval(() => {
-        if (this.oldestAt && performance.now() - this.oldestAt > 8000)
+        if (this.backlog.oldestAge(performance.now()) > 8000)
           this.fail(
             "A saída acumulou mais de 8 segundos de atraso e foi encerrada.",
           );

@@ -67,9 +67,9 @@ test("screen-focus layout provides large 16:9 screen presentation and side camer
     W,
     H,
   );
-  // Screen width is large (880px)
-  assert.equal(boxes.screen.width, 880);
-  assert.equal(boxes.screen.height, 495);
+  // Screen takes most of the frame (992x558, 16:9)
+  assert.equal(boxes.screen.width, 992);
+  assert.equal(boxes.screen.height, 558);
 
   // Camera box is beside it
   assert.ok(boxes.camera.x > boxes.screen.x);

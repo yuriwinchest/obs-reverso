@@ -35,15 +35,20 @@ export function computePresentationBoxes(
   const swap = !!config.swapPresentation;
 
   if (layout === "side-by-side") {
-    const margin = 24;
-    const gap = 20;
+    const margin = 16;
+    const gap = 16;
     const availableW = w - 2 * margin - gap;
     const bw = Math.floor(availableW / 2);
     const bh = Math.round((bw * 9) / 16);
     const y = Math.round((h - bh) / 2);
 
     const left: LayoutRect = { x: margin, y, width: bw, height: bh };
-    const right: LayoutRect = { x: margin + bw + gap, y, width: bw, height: bh };
+    const right: LayoutRect = {
+      x: margin + bw + gap,
+      y,
+      width: bw,
+      height: bh,
+    };
 
     return {
       screen: swap ? right : left,
@@ -52,21 +57,19 @@ export function computePresentationBoxes(
   }
 
   if (layout === "screen-focus") {
-    const margin = 24;
-    const gap = 20;
-    // 880x495 is exactly 16:9, leaving 332px for the presenter box
-    const sw = 880;
-    const sh = Math.round((sw * 9) / 16); // 495
-    const sy = Math.round((h - sh) / 2); // 112
-    const cw = w - 2 * margin - gap - sw; // 332
-    const ch = sh;
-
-    const left: LayoutRect = { x: margin, y: sy, width: sw, height: sh };
-    const right: LayoutRect = { x: margin + sw + gap, y: sy, width: cw, height: ch };
-
+    // Thin margins and a narrow portrait camera column: the shared screen gets
+    // as much of the frame as possible while staying 16:9 (nothing cropped).
+    const margin = 16;
+    const gap = 16;
+    const cw = 240;
+    const sw = w - 2 * margin - gap - cw; // 992 at 1280
+    const sh = Math.round((sw * 9) / 16); // 558
+    const sy = Math.round((h - sh) / 2);
+    const screenX = swap ? margin + cw + gap : margin;
+    const cameraX = swap ? margin : margin + sw + gap;
     return {
-      screen: swap ? { x: margin + cw + gap, y: sy, width: sw, height: sh } : left,
-      camera: swap ? { x: margin, y: sy, width: cw, height: ch } : right,
+      screen: { x: screenX, y: sy, width: sw, height: sh },
+      camera: { x: cameraX, y: sy, width: cw, height: sh },
     };
   }
 
