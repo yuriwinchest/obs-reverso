@@ -15,6 +15,10 @@ function videoElement(stream: MediaStream) {
   video.srcObject = stream;
   return video;
 }
+/** Windows names a Bluetooth headset mic "... Hands-Free AG Audio". */
+export function isHandsFreeMic(label: string) {
+  return /hands-?free|viva-?voz|bluetooth/i.test(label);
+}
 export function coverRect(sw: number, sh: number, dw: number, dh: number) {
   const scale = Math.max(dw / sw, dh / sh);
   return {
@@ -151,7 +155,7 @@ export class StudioEngine {
     });
     this.metrics.camera = true;
     this.emit();
-    this.ensureSegmenter();
+    this.syncSegmenter();
   }
   private stopCameraTracks() {
     this.camera?.getTracks().forEach((t) => t.stop());
@@ -174,20 +178,58 @@ export class StudioEngine {
     this.metrics.segmentation = "off";
     this.emit();
   }
+  /** Device the user asked for; kept while muted so unmuting reopens it. */
+  private micRequest: { deviceId?: string } | null = null;
+  /**
+   * Opening the mic of a Bluetooth headset switches Windows to the Hands-Free
+   * profile: everything in the headphones turns into choppy phone audio. When
+   * no device was chosen, prefer any other input (notebook or USB mic).
+   */
+  private async pickMicDevice(deviceId?: string) {
+    if (deviceId) return deviceId;
+    const inputs = (await navigator.mediaDevices.enumerateDevices()).filter(
+      (d) => d.kind === "audioinput" && d.deviceId !== "communications",
+    );
+    const fallback = inputs.find(
+      (d) => d.deviceId !== "default" && d.label && !isHandsFreeMic(d.label),
+    );
+    const preferred = inputs.find((d) => d.deviceId === "default");
+    if (preferred && isHandsFreeMic(preferred.label) && fallback)
+      return fallback.deviceId;
+    return undefined;
+  }
   async startMic(deviceId?: string) {
+    this.micRequest = { deviceId };
+    this.metrics.microphone = true;
+    if (this.config.muted) {
+      // Muted: keep the device closed so a Bluetooth headset stays in stereo.
+      this.micGeneration++;
+      this.stopMicTracks();
+      this.emit();
+      return;
+    }
+    await this.openMic(deviceId);
+  }
+  private async openMic(deviceId?: string) {
     const generation = ++this.micGeneration;
     let stream: MediaStream;
     try {
+      const chosen = await this.pickMicDevice(deviceId);
       stream = await navigator.mediaDevices.getUserMedia({
         video: false,
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: false,
-          ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+          ...(chosen ? { deviceId: { exact: chosen } } : {}),
         },
       });
     } catch {
+      if (generation === this.micGeneration) {
+        this.micRequest = null;
+        this.metrics.microphone = false;
+        this.emit();
+      }
       throw new Error(
         "Não foi possível abrir o microfone. Confira a permissão e selecione a entrada de áudio.",
       );
@@ -211,6 +253,32 @@ export class StudioEngine {
     });
     this.metrics.microphone = true;
     this.emit();
+    // Before the first permission Windows hides device names, so the default
+    // (possibly Hands-Free) mic opens once; with names now visible, retry.
+    if (!deviceId && isHandsFreeMic(this.micLabel)) {
+      const better = await this.pickMicDevice();
+      if (better && generation === this.micGeneration && !this.disposed)
+        await this.openMic(better);
+    }
+  }
+  /** Label of the input actually open, so the UI can warn about Hands-Free. */
+  get micLabel() {
+    return this.mic?.getAudioTracks()[0]?.label ?? "";
+  }
+  private async syncMicDevice() {
+    if (!this.micRequest) return;
+    if (this.config.muted) {
+      this.micGeneration++;
+      this.stopMicTracks();
+      this.emit();
+      return;
+    }
+    if (this.mic) return;
+    try {
+      await this.openMic(this.micRequest.deviceId);
+    } catch (error) {
+      this.onError((error as Error).message);
+    }
   }
   private stopMicTracks() {
     this.micNode?.disconnect();
@@ -220,6 +288,7 @@ export class StudioEngine {
   }
   stopMic() {
     this.micGeneration++;
+    this.micRequest = null;
     this.stopMicTracks();
     this.metrics.microphone = false;
     this.metrics.micLevel = 0;
@@ -255,6 +324,7 @@ export class StudioEngine {
     });
     this.metrics.screen = true;
     this.emit();
+    this.syncSegmenter();
   }
   stopScreen() {
     this.screenNode?.disconnect();
@@ -268,25 +338,24 @@ export class StudioEngine {
     this.screenVideo = null;
     this.metrics.screen = false;
     this.emit();
+    this.syncSegmenter();
   }
   update(patch: Partial<ProgramConfig>) {
     const oldImage = this.config.imageUrl;
-    const wasOriginal = this.config.background === "original";
+    const neededMask = this.needsMask();
+    const wasMuted = this.config.muted;
     this.config = { ...this.config, ...patch };
     this.syncGains();
-    if (this.config.background === "original") {
-      this.worker?.terminate();
-      this.worker = null;
-      this.pending = false;
-      this.mask?.close();
-      this.mask = null;
-      this.metrics.segmentation = "off";
-      this.emit();
-    } else if (wasOriginal && this.metrics.segmentation === "error") {
+    if (
+      !neededMask &&
+      this.needsMask() &&
+      this.metrics.segmentation === "error"
+    ) {
       this.worker?.terminate();
       this.worker = null;
       this.pending = false;
     }
+    if (wasMuted !== this.config.muted) void this.syncMicDevice();
     if (patch.imageUrl !== undefined && oldImage !== patch.imageUrl) {
       this.image = null;
       if (patch.imageUrl) {
@@ -301,15 +370,34 @@ export class StudioEngine {
         image.src = patch.imageUrl;
       }
     }
-    this.ensureSegmenter();
+    this.syncSegmenter();
+  }
+  /** The AI mask is needed for a virtual background or for the PiP cut-out. */
+  private needsMask() {
+    if (this.config.background !== "original") return true;
+    return Boolean(
+      this.config.pipCutout &&
+      this.screen &&
+      this.config.presentationLayout === "pip",
+    );
+  }
+  private syncSegmenter() {
+    if (this.needsMask()) {
+      this.ensureSegmenter();
+      return;
+    }
+    if (!this.worker && !this.mask && this.metrics.segmentation === "off")
+      return;
+    this.worker?.terminate();
+    this.worker = null;
+    this.pending = false;
+    this.mask?.close();
+    this.mask = null;
+    this.metrics.segmentation = "off";
+    this.emit();
   }
   private ensureSegmenter() {
-    if (
-      this.disposed ||
-      !this.camera ||
-      this.config.background === "original" ||
-      this.worker
-    )
+    if (this.disposed || !this.camera || !this.needsMask() || this.worker)
       return;
     this.metrics.segmentation = "loading";
     this.emit();
@@ -519,7 +607,7 @@ export class StudioEngine {
       const layerCtx = this.layer.getContext("2d")!;
       layerCtx.clearRect(0, 0, w, h);
       if (
-        this.config.background !== "original" &&
+        this.needsMask() &&
         this.mask &&
         now - this.maskTime >= 2000 &&
         this.metrics.segmentation === "ready"
@@ -534,11 +622,14 @@ export class StudioEngine {
         this.emit();
       }
       const effect =
-        this.config.background !== "original" &&
-        this.mask &&
-        now - this.maskTime < 2000;
+        this.needsMask() && this.mask && now - this.maskTime < 2000;
+      // Over a shared screen the person floats alone: a boxed virtual
+      // background there reads as a third screen inside the frame.
+      const cutout = Boolean(
+        effect && this.screen && !isSplit && this.config.pipCutout,
+      );
       if (effect) {
-        this.background(layerCtx, w, h, now);
+        if (!cutout) this.background(layerCtx, w, h, now);
         if (this.foreground.width !== w) {
           this.foreground.width = w;
           this.foreground.height = h;
@@ -629,26 +720,40 @@ export class StudioEngine {
           );
           ctx.stroke();
         } else {
-          const { x: px, y: py, width: pw, height: ph } = computePipRect(
-            this.config,
-            w,
-            h,
-          );
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(px, py, pw, ph, 16);
-          ctx.clip();
-          ctx.drawImage(this.layer, px, py, pw, ph);
-          ctx.restore();
-          ctx.strokeStyle = "#e8e8dc";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.roundRect(px, py, pw, ph, 16);
-          ctx.stroke();
+          const {
+            x: px,
+            y: py,
+            width: pw,
+            height: ph,
+          } = computePipRect(this.config, w, h);
+          if (cutout) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(px, py, pw, ph);
+            ctx.clip();
+            // A soft shadow keeps the silhouette legible on light screens.
+            ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+            ctx.shadowBlur = 14;
+            ctx.shadowOffsetY = 3;
+            ctx.drawImage(this.layer, px, py, pw, ph);
+            ctx.restore();
+          } else {
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(px, py, pw, ph, 16);
+            ctx.clip();
+            ctx.drawImage(this.layer, px, py, pw, ph);
+            ctx.restore();
+            ctx.strokeStyle = "#e8e8dc";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(px, py, pw, ph, 16);
+            ctx.stroke();
+          }
         }
       } else ctx.drawImage(this.layer, 0, 0);
       if (
-        this.config.background !== "original" &&
+        this.needsMask() &&
         this.metrics.segmentation === "ready" &&
         !this.pending &&
         now - this.lastMaskRequest > 90

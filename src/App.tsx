@@ -23,7 +23,7 @@ import {
   VideoOff,
   LoaderCircle,
 } from "lucide-react";
-import { StudioEngine } from "./engine/StudioEngine";
+import { StudioEngine, isHandsFreeMic } from "./engine/StudioEngine";
 import { OutputController } from "./engine/OutputController";
 import {
   clampFraming,
@@ -31,11 +31,7 @@ import {
   zoomAt,
   type Framing,
 } from "./engine/framing";
-import {
-  computePipRect,
-  clampPipPosition,
-  isPointInPip,
-} from "./engine/pip";
+import { computePipRect, clampPipPosition, isPointInPip } from "./engine/pip";
 import {
   defaultConfig,
   emptyMetrics,
@@ -516,7 +512,9 @@ export default function App() {
               title={
                 canFrame
                   ? "Arraste para mover a câmera; roda do mouse aumenta ou diminui"
-                  : metrics.screen && metrics.camera && config.presentationLayout === "pip"
+                  : metrics.screen &&
+                      metrics.camera &&
+                      config.presentationLayout === "pip"
                     ? "Clique e arraste sua câmera para qualquer lugar da tela"
                     : undefined
               }
@@ -754,7 +752,9 @@ export default function App() {
               >
                 <button
                   type="button"
-                  className={config.presentationLayout === "pip" ? "active" : ""}
+                  className={
+                    config.presentationLayout === "pip" ? "active" : ""
+                  }
                   onClick={() => update({ presentationLayout: "pip" })}
                   title="Câmera flutuante sobre a tela"
                 >
@@ -1030,7 +1030,9 @@ export default function App() {
                         });
                     }}
                   >
-                    <option value="">Microfone padrão</option>
+                    <option value="">
+                      Automático (evita o microfone do fone Bluetooth)
+                    </option>
                     {devices
                       .filter((d) => d.kind === "audioinput")
                       .map((device, index) => (
@@ -1042,6 +1044,17 @@ export default function App() {
                         </option>
                       ))}
                   </select>
+                  {metrics.microphone &&
+                    !config.muted &&
+                    isHandsFreeMic(engine.current?.micLabel ?? "") && (
+                      <p className="inline-warning">
+                        Este é o microfone do fone Bluetooth. Enquanto ele está
+                        aberto, o Windows deixa o som do fone picotado e com
+                        qualidade de telefone. Para um som limpo, escolha o
+                        microfone do computador (ou um USB) e deixe o fone só
+                        para ouvir.
+                      </p>
+                    )}
                   <div
                     className="audio-meter"
                     role="meter"
@@ -1131,23 +1144,35 @@ export default function App() {
                         disponibilidade no Windows.
                       </p>
                       <div className="row-between">
-                        <span className="field-label">Disposição das telas</span>
+                        <span className="field-label">
+                          Disposição das telas
+                        </span>
                         <div className="segmented">
                           <button
                             aria-pressed={config.presentationLayout === "pip"}
-                            onClick={() => update({ presentationLayout: "pip" })}
+                            onClick={() =>
+                              update({ presentationLayout: "pip" })
+                            }
                           >
                             Sobreposta
                           </button>
                           <button
-                            aria-pressed={config.presentationLayout === "side-by-side"}
-                            onClick={() => update({ presentationLayout: "side-by-side" })}
+                            aria-pressed={
+                              config.presentationLayout === "side-by-side"
+                            }
+                            onClick={() =>
+                              update({ presentationLayout: "side-by-side" })
+                            }
                           >
                             Lado a lado
                           </button>
                           <button
-                            aria-pressed={config.presentationLayout === "screen-focus"}
-                            onClick={() => update({ presentationLayout: "screen-focus" })}
+                            aria-pressed={
+                              config.presentationLayout === "screen-focus"
+                            }
+                            onClick={() =>
+                              update({ presentationLayout: "screen-focus" })
+                            }
                           >
                             Foco na tela
                           </button>
@@ -1205,8 +1230,23 @@ export default function App() {
                             </div>
                           </div>
                           <p className="field-help">
-                            Você também pode clicar sobre a sua câmera na prévia e
-                            arrastá-la livremente para qualquer lugar da tela.
+                            Você também pode clicar sobre a sua câmera na prévia
+                            e arrastá-la livremente para qualquer lugar da tela.
+                          </p>
+                          <label className="check-label">
+                            <input
+                              type="checkbox"
+                              checked={config.pipCutout}
+                              onChange={(e) =>
+                                update({ pipCutout: e.target.checked })
+                              }
+                            />{" "}
+                            Só você, sem quadro
+                          </label>
+                          <p className="field-help">
+                            Sobre a tela compartilhada aparece só a sua imagem
+                            recortada, sem moldura nem fundo atrás. Desmarque
+                            para voltar ao quadro com fundo.
                           </p>
                           <label className="range-label" htmlFor="pip-size">
                             Tamanho da câmera{" "}
@@ -1227,12 +1267,16 @@ export default function App() {
                       ) : (
                         <>
                           <div className="row-between">
-                            <span className="field-label">Posição das telas</span>
+                            <span className="field-label">
+                              Posição das telas
+                            </span>
                             <button
                               type="button"
                               className="button secondary sm"
                               onClick={() =>
-                                update({ swapPresentation: !config.swapPresentation })
+                                update({
+                                  swapPresentation: !config.swapPresentation,
+                                })
                               }
                             >
                               {config.swapPresentation

@@ -16,6 +16,8 @@ export interface ProgramConfig {
   swapPresentation: boolean;
   pipPosition: "left" | "right" | "custom";
   pipSize: number;
+  /** Over a shared screen, show only the cut-out person (no box, no virtual background). */
+  pipCutout: boolean;
   pipX?: number;
   pipY?: number;
   title: string;
@@ -38,6 +40,7 @@ export const defaultConfig: ProgramConfig = {
   swapPresentation: false,
   pipPosition: "right",
   pipSize: 0.25,
+  pipCutout: true,
   pipX: 0.7265625,
   pipY: 0.7083333,
   title: "",

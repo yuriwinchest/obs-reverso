@@ -309,6 +309,10 @@ export class Outputs {
       "3000k",
       "-bufsize",
       "6000k",
+      // Stretch/fill tiny gaps in the browser audio timestamps instead of
+      // letting them become audible clicks and drop-outs in the live.
+      "-af",
+      "aresample=async=1000:first_pts=0",
       "-c:a",
       "aac",
       "-b:a",

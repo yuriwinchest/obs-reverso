@@ -12,6 +12,14 @@
 
 ## Última atualização
 
+- **Data/autor:** 2026-11-22, Claude (Opus 5.5) no Claude Code. Fase A.
+- **Pedido (Yuri):** 1) Sobre a tela compartilhada, mostrar só a pessoa, sem o quadro com fundo virtual (eram "três telas"). 2) Áudio picotando no fone Bluetooth e na live/gravação.
+- **Feito:** `pipCutout` (padrão ligado) em `types.ts`; `StudioEngine.ts` desenha só a silhueta recortada com sombra no modo Sobreposta e liga a IA de recorte mesmo com fundo Original (`needsMask`/`syncSegmenter`); o microfone é liberado ao silenciar e o modo Automático evita o mic Hands-Free do Bluetooth (`isHandsFreeMic`); `App.tsx` tem a caixa "Só você, sem quadro" e um aviso de mic Bluetooth; `outputs.ts` usa `aresample=async` na live; `tests/microphone.test.ts`.
+- **Validação real:** `tsc` ok; `npm test` 49/49; `build` ok; `smoke` PASS; `check:framing` PASS; `qa:ui` FAIL só em 2560x1400, porque os monitores agora são de 1280x720 (ambiente, não código). Recorte e Bluetooth não testados com a câmera e o fone reais.
+- **Riscos/próximo passo:** a borda do recorte segue a máscara (cerca de 7 fps) e pode atrasar em movimentos rápidos. Se o único microfone for o do fone, o Windows continua no modo telefone. Falta o Yuri homologar com a câmera e o fone dele.
+
+## Penúltima atualização
+
 - **Data/autor:** 2026-10-16, Tony / Equipe TONE (Antigravity). Fase A.
 - **Pedido (Yuri):** Dividir as telas e colocar lado a lado a imagem da webcam e a tela do monitor compartilhada, em vez de apenas a telinha pequena (PiP) sobreposta.
 - **Feito:**
@@ -23,19 +31,6 @@
 - **Validação real:** `tsc --noEmit` ok; `npm test` 47/47 PASS; `npm run check:framing` PASS; `npm run qa:ui` PASS; `npm run build` ok; `npm run check:package` PASS; `npm run package:dir` ok.
 - **Próximo passo:** Yuri testar os modos "Lado a lado" e "Foco na tela" na apresentação com tela compartilhada e webcam ativas.
 
-## Penúltima atualização
-
-- **Data/autor:** 2026-10-15, Tony / Equipe TONE (Antigravity). Fase A.
-- **Pedido (Yuri):** 1) Remover o título que cobria o vídeo ("CRIEI MEU PROPRIO OBS"), pois o título deve ir para o YouTube e não estampar o vídeo. 2) Permitir clicar sobre a telinha da câmera na prévia e arrastá-la livremente para qualquer canto/altura da tela. 3) Dúvida sobre atualização/reinstalação.
-- **Feito:**
-  - `src/engine/StudioEngine.ts`: removida rotina de desenho invasivo do título/subtítulo no canvas do vídeo; integrado `computePipRect` para renderização fluida do PiP livre.
-  - `src/App.tsx`: removido o bloco confuso "Seu nome no vídeo"; adicionado campo opcional "Descrição da transmissão" no painel Destino; implementado drag and drop direto da câmera PiP no canvas com detecção de clique (`isPointInPip`), arrasto delimitado com feedback visual de cursor (`grab`/`grabbing`) e double click para resetar; botões de esquerda/direita sincronizados.
-  - `src/engine/pip.ts` + `tests/pip.test.ts`: novo módulo de geometria do PiP com 6 testes unitários.
-  - `electron/youtube.ts` + `electron/main.ts` + `src/shared/types.ts`: suporte opcional ao campo `description` no broadcast do YouTube.
-  - `src/styles.css`: estilos para `textarea`, cursor `pip-hover` e `pip-dragging`.
-- **Validação real:** `tsc --noEmit` ok; `npm test` 43/43 PASS; `npm run build` ok; `check:framing` PASS; `qa:ui` PASS; `smoke` PASS; `package:dir` e `package` ok → `release/OBS-Reverso-Setup-0.1.0.exe`; `check:package` PASS.
-- **Próximo passo:** Yuri testar o arrasto da câmera PiP na tela compartilhada, ausência de tarjas no vídeo e opções de inicialização/instalação.
-
 ## Estado inicial
 
 - Projeto recém-adicionado à memória de agentes.
@@ -43,5 +38,5 @@
 
 ## Últimas entregas (mais recente primeiro)
 
+- 2026-11-22 — Câmera recortada sem quadro sobre a tela e correção do áudio picotado com fone Bluetooth (Claude).
 - 2026-10-16 — Divisão de telas lado a lado ("Lado a lado" / "Foco na tela") e alternador de posições (Tony/Antigravity).
-- 2026-10-15 — Câmera PiP arrastável livremente na prévia e remoção de tarja sobre o vídeo (Tony/Antigravity).
