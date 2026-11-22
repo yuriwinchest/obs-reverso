@@ -54,6 +54,30 @@ const offsetText = (value: number, negative: string, positive: string) =>
 
 export default function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const stageColumn = useRef<HTMLElement>(null);
+  // The output is 16:9; a wider stage would show dark bars beside it. The
+  // frame takes exactly the width the available height allows.
+  const [previewWidth, setPreviewWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const column = stageColumn.current,
+      node = canvas.current;
+    if (!column || !node || typeof ResizeObserver === "undefined") return;
+    const fit = () => {
+      if (!window.matchMedia("(min-width: 761px)").matches) {
+        setPreviewWidth(null);
+        return;
+      }
+      const height = node.clientHeight;
+      if (!height) return;
+      const width = Math.min(column.clientWidth, Math.floor((height * 16) / 9));
+      setPreviewWidth((old) => (old === width ? old : width));
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(column);
+    observer.observe(node);
+    fit();
+    return () => observer.disconnect();
+  }, []);
   const engine = useRef<StudioEngine | null>(null);
   const recording = useRef<OutputController | null>(null);
   const broadcast = useRef<OutputController | null>(null);
@@ -485,9 +509,20 @@ export default function App() {
       </header>
 
       <main id="studio" className="workspace">
-        <section className="stage-column" aria-label="Composição do vídeo">
+        <section
+          ref={stageColumn}
+          className="stage-column"
+          aria-label="Composição do vídeo"
+        >
           <h1 className="sr-only">Estúdio OBS Reverso</h1>
-          <div className="preview-shell">
+          <div
+            className="preview-shell"
+            style={
+              previewWidth
+                ? { width: previewWidth, alignSelf: "center" }
+                : undefined
+            }
+          >
             <div className="preview-toolbar">
               <span>
                 <span

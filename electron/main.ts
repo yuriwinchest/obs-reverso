@@ -192,6 +192,8 @@ app.whenReady().then(async () => {
     minWidth: placement.minWidth,
     minHeight: placement.minHeight,
     backgroundColor: "#111a18",
+    // The File/Edit/View bar steals height from the 16:9 preview; Alt shows it.
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -315,8 +317,10 @@ app.whenReady().then(async () => {
       throw new Error("Uma transmissão já está em andamento.");
     if (!options || typeof options !== "object")
       throw new Error("Revise as opções da transmissão.");
-    const { mode, key, title, description, privacy } =
-      options as Record<string, unknown>;
+    const { mode, key, title, description, privacy } = options as Record<
+      string,
+      unknown
+    >;
     if (mode !== "key" && mode !== "oauth")
       throw new Error("Modo de conexão inválido.");
     const cover = mode === "oauth" ? thumbnail : null;
