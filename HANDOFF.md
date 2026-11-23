@@ -12,19 +12,19 @@
 
 ## Última atualização
 
+- **Data/autor:** 2026-11-22, Claude (Opus 5.5) no Claude Code. Fase B, a partir da live do Yuri.
+- **Pedido (Yuri):** A live no YouTube ainda caía com o aviso de 8 s de atraso, já com o instalador novo (19:56) instalado.
+- **Feito:** `electron/outputs.ts` agora manda a saída do ffmpeg por um muxer `fifo` (`broadcastOutputArgs`): quando o upload trava, ele descarta pacotes em vez de travar a entrada e reconecta sozinho (até 30 tentativas, de 2 em 2 s). O app avisa "reconectando" pela chegada de linha no stderr, sem repassar o texto, que pode conter a chave. `-flags +global_header` é obrigatório com fifo, senão o FLV sai com H.264 em Annex B e é sondado como vídeo 0x0. O prazo da fila e o watchdog passaram de 8 para 15 s.
+- **Validação real:** ensaio do ffmpeg contra porta fechada (segue codificando e tentando de novo); `npm test` 53/53; `smoke` PASS (depois de corrigir o global_header); `package` e `check:package` PASS → instalador das 21:15. Não testado contra o YouTube real.
+- **Riscos/próximo passo:** com a chave errada, o app mostra "Sinal enviado" e só acusa a falha depois de ~1 min de tentativas. O Yuri deve instalar e fazer uma live longa. O TikTok foi para uma sessão própria.
+
+## Penúltima atualização
+
 - **Data/autor:** 2026-11-22, Claude (Opus 5.5) no Claude Code. Fase B.
 - **Pedido (Yuri):** Tirar as faixas pretas nas laterais da prévia e dar mais espaço à imagem.
 - **Feito:** `App.tsx` usa um ResizeObserver para que a moldura da prévia tenha exatamente a largura 16:9 que a altura permite, sem faixas escuras dentro do quadro. `electron/main.ts` esconde a barra File/Edit/View (`autoHideMenuBar`; volta com Alt) para ganhar altura. O vídeo enviado sempre foi 16:9 e não tinha faixas.
 - **Validação real:** `tsc` ok; `npm test` 52/52; o `qa:ui` com capturas em 1920x1040 e 1280x680 mostra a moldura colada ao vídeo (o 2560x1400 falha porque o monitor tem 1280x720); `package` e `check:package` PASS → instalador das 19:56.
 - **Próximo passo:** o Yuri instalar e conferir a prévia e o Lado a lado.
-
-## Penúltima atualização
-
-- **Data/autor:** 2026-11-22, Claude (Opus 5.5) no Claude Code. Fase B, a partir do teste do Yuri ao vivo.
-- **Pedido (Yuri):** 1) A live caía com "acumulou mais de 8 segundos de atraso". 2) Mais espaço para a tela. 3) Lado a lado com dois quadros iguais em pé, com o espaço entre eles ajustável.
-- **Feito:** `src/engine/backlog.ts` mede a idade do bloco mais antigo; antes contava o tempo desde a última vez que a fila esvaziou e derrubava lives saudáveis (`OutputController.ts`). `layout.ts`: o Foco na tela passa a 992x558; o Lado a lado vira dois quadros de altura total com `splitRatio` (25–80%). `StudioEngine.ts` mostra a tela inteira (contain) ou preenchida, conforme `screenFill`. `App.tsx` ganhou o controle de espaço, os atalhos "Meio a meio" e "Tela grande" e a caixa "Preencher".
-- **Validação real:** upload medido em ~22 Mbps no cabo (a rede não era o gargalo); `tsc` ok; `npm test` 52/52; `smoke` PASS; `check:framing` PASS; `package` e `check:package` PASS → `release/OBS-Reverso-Setup-0.1.0.exe` (19:45). O visual do Lado a lado ajustável não foi visto com câmera real.
-- **Riscos/próximo passo:** com o PC sobrecarregado de verdade, a proteção de 8 s ainda encerra a live (agora só com atraso real). Falta o Yuri instalar depois da live e homologar a queda, o recorte e a divisão.
 
 ## Estado inicial
 
@@ -33,5 +33,5 @@
 
 ## Últimas entregas (mais recente primeiro)
 
+- 2026-11-22 — Live sobrevive a quedas de rede: fila fifo com reconexão (Claude).
 - 2026-11-22 — Prévia sem faixas pretas e sem barra de menu (Claude).
-- 2026-11-22 — Live não cai mais por falso atraso; Lado a lado ajustável (Claude).

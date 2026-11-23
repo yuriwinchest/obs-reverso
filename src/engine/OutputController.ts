@@ -90,9 +90,9 @@ export class OutputController {
         );
       recorder.start(500);
       this.watchdog = setInterval(() => {
-        if (this.backlog.oldestAge(performance.now()) > 8000)
+        if (this.backlog.oldestAge(performance.now()) > 15000)
           this.fail(
-            "A saída acumulou mais de 8 segundos de atraso e foi encerrada.",
+            "A saída acumulou mais de 15 segundos de atraso e foi encerrada. O computador não acompanhou a codificação.",
           );
       }, 1000);
       if (this.kind === "recording") this.onChange("recording");

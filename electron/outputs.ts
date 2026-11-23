@@ -6,6 +6,39 @@ import type { OutputStatus } from "../src/shared/types";
 
 export const MAX_CHUNK = 4 * 1024 * 1024;
 export const MAX_BACKLOG = 16 * 1024 * 1024;
+export const QUEUE_DEADLINE_MS = 15000;
+/**
+ * The fifo muxer decouples the encoder from the network: when the upload
+ * stalls it drops packets instead of blocking stdin (which used to end the
+ * live after 8 s), and it reconnects to the ingest by itself. A wrong key
+ * still fails after the recovery attempts run out (~1 min).
+ */
+export function broadcastOutputArgs(destination: string) {
+  return [
+    "-f",
+    "fifo",
+    "-fifo_format",
+    "flv",
+    "-format_opts",
+    "flvflags=no_duration_filesize",
+    "-queue_size",
+    "1200",
+    "-drop_pkts_on_overflow",
+    "1",
+    "-attempt_recovery",
+    "1",
+    "-recover_any_error",
+    "1",
+    "-max_recovery_attempts",
+    "30",
+    "-recovery_wait_time",
+    "2",
+    "-restart_with_keyframe",
+    "1",
+    "-y",
+    destination,
+  ];
+}
 export function youtubeDestination(
   key: unknown,
   address = "rtmps://a.rtmps.youtube.com:443/live2",
@@ -64,13 +97,13 @@ class OrderedSink {
     }
     this.next++;
     this.queued += data.length;
-    const deadline = Date.now() + 8000;
+    const deadline = Date.now() + QUEUE_DEADLINE_MS;
     const result = this.tail
       .then(async () => {
         if (this.failed) throw this.failed;
         const timeout = deadline - Date.now();
         if (timeout <= 0)
-          throw new Error("A fila de mídia ultrapassou oito segundos.");
+          throw new Error("A fila de mídia ultrapassou o limite de espera.");
         await write(data, timeout);
         this.bytes += data.length;
       })
@@ -109,6 +142,8 @@ type Broadcast = {
   closed: Promise<number | null>;
   stopping: boolean;
   sending: boolean;
+  reconnecting: boolean;
+  lastNetError: number;
 };
 export class Outputs {
   private recording: Recording | null = null;
@@ -297,6 +332,10 @@ export class Outputs {
       "ultrafast",
       "-tune",
       "zerolatency",
+      // The fifo muxer hides FLV's need for out-of-band SPS/PPS; without this
+      // the H.264 goes in Annex B form and probes as a 0x0 video.
+      "-flags",
+      "+global_header",
       "-pix_fmt",
       "yuv420p",
       "-r",
@@ -323,10 +362,7 @@ export class Outputs {
       "pipe:1",
       "-stats_period",
       "0.5",
-      "-f",
-      "flv",
-      "-y",
-      destination,
+      ...broadcastOutputArgs(destination),
     ];
     const child = spawn(this.ffmpeg, args, {
       windowsHide: true,
@@ -343,6 +379,8 @@ export class Outputs {
       closed,
       stopping: false,
       sending: false,
+      reconnecting: false,
+      lastNetError: 0,
     };
     this.broadcast = current;
     const fail = () => {
@@ -360,7 +398,21 @@ export class Outputs {
     child.on("error", fail);
     child.stdin.on("error", fail);
     // FFmpeg diagnostics may contain the full ingestion URL; never forward them.
-    child.stderr.on("data", () => undefined);
+    // Only the fact that an error line arrived is used (the fifo muxer logs one
+    // per failed connection attempt); the text itself is dropped.
+    child.stderr.on("data", () => {
+      if (current.stopping) return;
+      current.lastNetError = Date.now();
+      if (current.sending && !current.reconnecting && !smoke) {
+        current.reconnecting = true;
+        this.emit({
+          kind: "broadcast",
+          state: "sending",
+          message:
+            "A conexão com o destino oscilou. Reconectando sozinho, a live continua…",
+        });
+      }
+    });
     let progress = "";
     child.stdout.on("data", (data) => {
       progress += data.toString();
@@ -369,11 +421,13 @@ export class Outputs {
       for (const line of lines)
         if (
           /^out_time_us=\d+/.test(line) &&
-          Number(line.split("=")[1]) > 0 &&
-          !current.sending &&
-          !current.stopping
+          Number(line.split("=")[1]) > 3_000_000 &&
+          !current.stopping &&
+          Date.now() - current.lastNetError > 6000 &&
+          (!current.sending || current.reconnecting)
         ) {
           current.sending = true;
+          current.reconnecting = false;
           this.emit({
             kind: "broadcast",
             state: "sending",
