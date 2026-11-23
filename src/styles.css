@@ -1059,6 +1059,14 @@ p {
   color: inherit;
   margin-left: 10px;
 }
+.toast button.toast-link {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

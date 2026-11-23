@@ -15,6 +15,7 @@ import path from "node:path";
 import { Outputs, youtubeDestination, type BroadcastTarget } from "./outputs";
 import { YouTube } from "./youtube";
 import { TikTokKey } from "./tiktokKey";
+import { DiagLog } from "./diagLog";
 import {
   applyThumbnail,
   maxThumbnailBytes,
@@ -30,6 +31,7 @@ let selectedScreen: string | null = null;
 let outputs: Outputs;
 let youtube: YouTube;
 let tiktok: TikTokKey;
+let diag: DiagLog | null = null;
 let closing = false;
 let canClose = false;
 let acknowledgeClose: (() => void) | null = null;
@@ -70,6 +72,11 @@ function idValue(id: unknown): asserts id is string {
     throw new Error("Sessão inválida.");
 }
 function emit(status: OutputStatus) {
+  if (status.kind !== "recording" || status.state !== "sending")
+    diag?.write(
+      status.kind,
+      `${status.state}${status.message ? `: ${status.message}` : ""}`,
+    );
   if (window && !window.isDestroyed())
     window.webContents.send("studio:status", status);
 }
@@ -177,6 +184,9 @@ app.whenReady().then(async () => {
     encrypt: (value) => safeStorage.encryptString(value),
     decrypt: (value) => safeStorage.decryptString(value),
   });
+  diag = new DiagLog(path.join(app.getPath("userData"), "logs"));
+  diag.write("app", `OBS Reverso ${app.getVersion()} aberto`);
+  const log = (source: string, text: string) => diag?.write(source, text);
   outputs = new Outputs(ffmpeg, (status) => {
     emit(status);
     if (
@@ -191,7 +201,7 @@ app.whenReady().then(async () => {
         void confirmLive(current);
       }, 2000);
     }
-  });
+  }, undefined, log);
   const placement = initialWindowPlan(app.getPath("userData"));
   window = new BrowserWindow({
     title: "OBS Reverso",
@@ -386,6 +396,9 @@ app.whenReady().then(async () => {
         if (tiktokUrl) targets.push({ url: tiktokUrl, label: "TikTok" });
       }
       if (closing) throw new Error("O aplicativo está encerrando.");
+      diag?.protect(
+        targets.map((target) => target.url.slice(target.url.lastIndexOf("/") + 1)),
+      );
       const result = outputs.startBroadcast(
         targets,
         process.env.OBS_REVERSO_SMOKE === "1" && !app.isPackaged,
@@ -434,6 +447,20 @@ app.whenReady().then(async () => {
     return outputs.appendBroadcast(id, seq, bytes);
   });
   handle("broadcast-stop", stopBroadcast);
+  // Renderer-side events: encoder errors, backlog, errors shown on screen.
+  let diagCount = 0;
+  let diagWindow = Date.now();
+  handle("diag", (text: unknown) => {
+    if (typeof text !== "string") return;
+    if (Date.now() - diagWindow > 60000) {
+      diagWindow = Date.now();
+      diagCount = 0;
+    }
+    if (++diagCount <= 30) diag?.write("tela", text.slice(0, 500));
+  });
+  handle("open-logs", () =>
+    shell.openPath(path.join(app.getPath("userData"), "logs")),
+  );
   handle("youtube-configure", async () => {
     if (startingBroadcast || broadcastSession)
       throw new Error("Encerre a transmissão antes de alterar a conexão.");

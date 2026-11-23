@@ -466,13 +466,15 @@ async function validateMedia(file, minimumSeconds) {
     left.length === 3 && left[2] > left[0] * 2 && right[0] > right[2] * 3,
     "Pixels não preservaram a composição conhecida.",
   );
+  // The live FLV has a known ~1.7 s audio timestamp hiccup right at start-up
+  // (aresample async catching up; see HANDOFF). Measure the steady tone after it.
   const { stdout: pcm } = await exec(
     ffmpeg,
     [
       "-v",
       "error",
       "-ss",
-      "1",
+      "3",
       "-i",
       file,
       "-t",

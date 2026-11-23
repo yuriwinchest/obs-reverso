@@ -130,6 +130,9 @@ export interface StudioBridge {
   onStatus(callback: (status: OutputStatus) => void): () => void;
   onClosing(callback: () => void): () => void;
   finishClose(): Promise<void>;
+  /** One line for the diagnostic log (no secrets; main redacts URLs too). */
+  diag(text: string): Promise<void>;
+  openLogs(): Promise<string>;
 }
 declare global {
   interface Window {

@@ -72,24 +72,38 @@ export class OutputController {
               await window.studio.recordingAppend(id, seq, bytes);
             else await window.studio.broadcastAppend(id, seq, bytes);
           })
-          .catch(() =>
+          .catch((error: unknown) => {
+            this.diag(
+              `envio do bloco ${seq} falhou: ${(error as Error)?.message}`,
+            );
             this.fail(
               this.kind === "recording"
                 ? "A gravação falhou. O arquivo parcial foi preservado; verifique o espaço em disco."
                 : "O envio foi interrompido. Confira a conexão e a chave no YouTube Studio.",
-            ),
-          )
+            );
+          })
           .finally(() => {
             this.pendingBytes -= event.data.size;
             this.backlog.done();
           });
       };
-      recorder.onerror = () =>
+      recorder.onerror = (event) => {
+        const cause = (event as Event & { error?: DOMException }).error;
+        this.diag(
+          `MediaRecorder parou: ${cause?.name ?? "?"} ${cause?.message ?? ""}`,
+        );
         this.fail(
           "O codificador de vídeo foi interrompido. Encerre esta saída e tente novamente.",
         );
+      };
       recorder.start(500);
+      this.diag("iniciada");
+      let ticks = 0;
       this.watchdog = setInterval(() => {
+        if (++ticks % 15 === 0)
+          this.diag(
+            `atraso ${Math.round(this.backlog.oldestAge(performance.now()))} ms, fila ${this.pendingBytes} bytes, blocos ${this.seq}`,
+          );
         if (this.backlog.oldestAge(performance.now()) > 15000)
           this.fail(
             "A saída acumulou mais de 15 segundos de atraso e foi encerrada. O computador não acompanhou a codificação.",
@@ -115,9 +129,15 @@ export class OutputController {
       this.starting = false;
     }
   }
+  private diag(text: string) {
+    void window.studio?.diag?.(`${this.kind}: ${text}`).catch(() => {});
+  }
   private fail(message: string) {
     if (this.fault) return;
     this.fault = true;
+    this.diag(
+      `encerrada: ${message} (atraso ${Math.round(this.backlog.oldestAge(performance.now()))} ms, fila ${this.pendingBytes} bytes)`,
+    );
     this.onError(message);
     this.onChange("error");
     void this.stop().catch(() => {});

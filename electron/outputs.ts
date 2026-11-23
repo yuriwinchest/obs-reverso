@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { open, rename, mkdir, rm, type FileHandle } from "node:fs/promises";
 import path from "node:path";
+import { constants as osConstants, setPriority } from "node:os";
 import type { OutputStatus } from "../src/shared/types";
 
 export const MAX_CHUNK = 4 * 1024 * 1024;
@@ -226,6 +227,7 @@ export class Outputs {
       input: string,
       output: string,
     ) => Promise<void>,
+    private log: (source: string, text: string) => void = () => {},
   ) {}
   private remux(input: string, output: string): Promise<void> {
     if (this.finalizeRecording) return this.finalizeRecording(input, output);
@@ -288,6 +290,7 @@ export class Outputs {
         final,
       };
       this.recording = recording;
+      this.log("gravacao", "iniciada");
       this.emit({ kind: "recording", state: "starting", path: final });
       return { id: recording.id, path: final };
     } finally {
@@ -318,7 +321,11 @@ export class Outputs {
           path: current.final,
         });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        this.log(
+          "gravacao",
+          `falha ao gravar o bloco ${seq}: ${(error as Error)?.message} (fila ${current.sink.queued} bytes)`,
+        );
         this.emit({
           kind: "recording",
           state: "error",
@@ -349,6 +356,7 @@ export class Outputs {
           throw error;
         }
         await rm(current.partial, { force: true }).catch(() => undefined);
+        this.log("gravacao", `salva, ${current.sink.bytes} bytes`);
         this.emit({
           kind: "recording",
           state: "idle",
@@ -356,7 +364,11 @@ export class Outputs {
           bytes: current.sink.bytes,
         });
         return { path: current.final };
-      } catch {
+      } catch (error) {
+        this.log(
+          "gravacao",
+          `finalização falhou: ${(error as Error)?.message}; ${current.sink.bytes} bytes gravados`,
+        );
         await current.handle.close().catch(() => undefined);
         this.emit({
           kind: "recording",
@@ -440,6 +452,19 @@ export class Outputs {
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
     });
+    // With TikTok LIVE Studio, a 3D map and the browser all at 100% CPU, a
+    // normal-priority encoder falls behind real time and the queue deadline
+    // ends the live. Above-normal (not high/realtime) keeps the desktop usable.
+    try {
+      if (child.pid)
+        setPriority(child.pid, osConstants.priority.PRIORITY_ABOVE_NORMAL);
+    } catch {
+      /* Not fatal: the encoder simply runs at normal priority. */
+    }
+    this.log(
+      "live",
+      `encoder iniciado para ${labels.join(" + ")}${smoke ? " (ensaio local)" : ""}`,
+    );
     const closed = new Promise<number | null>((resolve) => {
       child.once("close", resolve);
     });
@@ -473,7 +498,19 @@ export class Outputs {
     // per failed connection attempt), plus the tee slave index when one
     // destination gives up; the text itself is dropped right here.
     let diagnostics = "";
+    // The diagnostic log gets the text, but only through DiagLog's redaction
+    // (URLs and the keys of this live), and at most 60 lines a minute.
+    let logged = 0;
+    let logWindow = Date.now();
     child.stderr.on("data", (data) => {
+      if (Date.now() - logWindow > 60000) {
+        logWindow = Date.now();
+        logged = 0;
+      }
+      if (logged < 60) {
+        logged++;
+        this.log("ffmpeg", data.toString().trim());
+      }
       if (current.stopping) return;
       current.lastNetError = Date.now();
       diagnostics = (diagnostics + data.toString()).slice(-4096);
@@ -505,11 +542,24 @@ export class Outputs {
       }
     });
     let progress = "";
+    let speed = "?";
+    let fps = "?";
+    let lastProgressLog = 0;
     child.stdout.on("data", (data) => {
       progress += data.toString();
       const lines = progress.split("\n");
       progress = lines.pop() ?? "";
-      for (const line of lines)
+      for (const line of lines) {
+        // speed < 1x for long means the PC is not encoding in real time.
+        if (line.startsWith("speed=")) speed = line.slice(6).trim();
+        if (line.startsWith("fps=")) fps = line.slice(4).trim();
+        if (line.startsWith("progress=") && Date.now() - lastProgressLog > 10000) {
+          lastProgressLog = Date.now();
+          this.log(
+            "live",
+            `encoder ${fps} fps, velocidade ${speed}, fila ${current.sink.queued} bytes`,
+          );
+        }
         if (
           /^out_time_us=\d+/.test(line) &&
           Number(line.split("=")[1]) > 3_000_000 &&
@@ -531,9 +581,14 @@ export class Outputs {
                   .join(" e no ")}.`,
           });
         }
+      }
       if (progress.length > 8192) progress = "";
     });
-    child.on("close", () => {
+    child.on("close", (code) => {
+      this.log(
+        "live",
+        `encoder saiu com código ${code}${current.stopping ? " (encerrado pelo usuário)" : " sem pedido de parada"}`,
+      );
       if (!current.stopping) fail();
     });
     this.emit({ kind: "broadcast", state: "starting" });
@@ -564,7 +619,11 @@ export class Outputs {
             });
           }),
       )
-      .catch(() => {
+      .catch((error: unknown) => {
+        this.log(
+          "live",
+          `bloco ${seq} não chegou ao encoder: ${(error as Error)?.message} (fila ${current.sink.queued} bytes)`,
+        );
         current.child.kill();
         this.emit({
           kind: "broadcast",

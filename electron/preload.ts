@@ -38,5 +38,7 @@ const bridge: StudioBridge = {
     return () => ipcRenderer.removeListener("studio:closing", listener);
   },
   finishClose: () => ipcRenderer.invoke("studio:finish-close"),
+  diag: (text) => ipcRenderer.invoke("studio:diag", text),
+  openLogs: () => ipcRenderer.invoke("studio:open-logs"),
 };
 contextBridge.exposeInMainWorld("studio", bridge);

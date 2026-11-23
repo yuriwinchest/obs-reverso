@@ -223,6 +223,28 @@ export default function App() {
     };
   }, []);
 
+  // Every error shown on screen also goes to the diagnostic log, which
+  // outlives the toast; that is how a live that dropped gets explained.
+  useEffect(() => {
+    if (error) void window.studio?.diag?.(`erro na tela: ${error}`).catch(() => {});
+  }, [error]);
+  const latestMetrics = useRef(metrics);
+  latestMetrics.current = metrics;
+  const outputActive =
+    !["idle", "error"].includes(recordState) ||
+    !["idle", "error"].includes(broadcastState);
+  useEffect(() => {
+    if (!outputActive) return;
+    const timer = setInterval(() => {
+      const m = latestMetrics.current;
+      void window.studio
+        ?.diag?.(
+          `estúdio ${m.fps.toFixed(1)} fps, IA ${m.segmentation} ${m.maskFps.toFixed(1)} fps, câmera ${m.camera}, tela ${m.screen}, gravação ${recordState}, live ${broadcastState}`,
+        )
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [outputActive, recordState, broadcastState]);
   const modalOpen = screenSources !== null || confirm !== null;
   useEffect(() => {
     if (!modalOpen) return;
@@ -2239,6 +2261,14 @@ export default function App() {
         >
           {error ? <AlertTriangle size={19} /> : <Check size={19} />}
           <p>{error || notice}</p>
+          {error && (
+            <button
+              className="toast-link"
+              onClick={() => void window.studio?.openLogs().catch(() => {})}
+            >
+              Ver registro
+            </button>
+          )}
           <button
             aria-label="Fechar aviso"
             onClick={() => {

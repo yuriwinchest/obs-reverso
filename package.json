@@ -1,6 +1,6 @@
 {
   "name": "obs-reverso",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Estúdio direto para YouTube com fundo virtual local",
   "main": "dist-electron/main.cjs",
