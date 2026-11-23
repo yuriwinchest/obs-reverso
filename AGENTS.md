@@ -24,6 +24,7 @@ devem ser lidos na ordem que o projeto determinar.
 ## Versão do instalador (OBS Reverso)
 
 - Todo instalador novo entregue ao Yuri sobe a versão em um passo (`npm version 0.1.N --no-git-tag-version`: 0.1.2, 0.1.3, 0.1.4...) antes do `npm run package`. Decisão do Yuri em 2026-11-22, porque todo Setup saía 0.1.0 e ele não sabia qual estava instalado.
+- O instalador entregue sempre vai para `D:\Projetos\Pessoal\OBS Reverso\release` (pasta do checkout principal), mesmo quando o build sai de um worktree: copie o `.exe` e o `.blockmap` para lá e confira o hash. Decisão do Yuri em 2026-11-22: ele procurou o Setup nessa pasta e não achou o que tinha sido gerado no worktree.
 
 ## Infraestrutura: VPS Hostinger e MCP (vale para todos os projetos do Yuri)
 
