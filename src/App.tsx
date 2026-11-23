@@ -38,12 +38,17 @@ import {
   type ProgramConfig,
   type Metrics,
   type YouTubeStatus,
+  type TikTokStatus,
 } from "./shared/types";
 
 type Panel = "sources" | "appearance" | "destination";
 type Source = { id: string; name: string; thumbnail: string };
+// Electron wraps main-process errors in a technical prefix; keep only our text.
 const message = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
+  (error instanceof Error ? error.message : String(error)).replace(
+    /^Error invoking remote method '[^']+': (?:Error: )?/,
+    "",
+  );
 const isBusyState = (state: string) =>
   state === "starting" || state === "stopping";
 const centered: Framing = { zoom: 1, x: 0, y: 0 };
@@ -101,6 +106,15 @@ export default function App() {
   });
   const [mode, setMode] = useState<"key" | "oauth">("oauth");
   const [streamKey, setStreamKey] = useState("");
+  const [toYoutube, setToYoutube] = useState(true);
+  const [toTiktok, setToTiktok] = useState(false);
+  const [tiktok, setTiktok] = useState<TikTokStatus>({
+    available: true,
+    saved: false,
+  });
+  const [tiktokServer, setTiktokServer] = useState("");
+  const [tiktokKey, setTiktokKey] = useState("");
+  const [tiktokEditing, setTiktokEditing] = useState(false);
   const [liveTitle, setLiveTitle] = useState("");
   const [liveDescription, setLiveDescription] = useState("");
   const [privacy, setPrivacy] = useState<"private" | "unlisted" | "public">(
@@ -152,6 +166,14 @@ export default function App() {
         .youtubeStatus()
         .then((v) => {
           if (alive) setYoutube(v);
+        })
+        .catch((e) => {
+          if (alive) setError(message(e));
+        });
+      window.studio
+        .tiktokStatus()
+        .then((v) => {
+          if (alive) setTiktok(v);
         })
         .catch((e) => {
           if (alive) setError(message(e));
@@ -386,20 +408,36 @@ export default function App() {
         engine.current.getStream(),
         {
           mode,
-          key: mode === "key" ? streamKey : undefined,
+          key: toYoutube && mode === "key" ? streamKey : undefined,
           title: liveTitle.trim(),
           description: liveDescription.trim() || undefined,
           privacy,
+          youtube: toYoutube,
+          tiktok: toTiktok,
         },
       );
       if (started) {
         setConfirm(null);
         setNotice(
-          mode === "key"
-            ? "Vídeo sendo enviado. Confira a transmissão no YouTube Studio."
-            : "Saída iniciada. Aguarde a confirmação do YouTube.",
+          !toYoutube
+            ? "Vídeo sendo enviado. Confira a live no app do TikTok."
+            : mode === "key"
+              ? `Vídeo sendo enviado. Confira no YouTube Studio${toTiktok ? " e no app do TikTok" : ""}.`
+              : `Saída iniciada. Aguarde a confirmação do YouTube${toTiktok ? "; confira o TikTok no app" : ""}.`,
         );
       }
+    });
+  const tiktokAction = (action: "save" | "clear") =>
+    run("tiktok", async () => {
+      if (action === "clear") {
+        setTiktok(await window.studio.tiktokClear());
+        setToTiktok(false);
+      } else {
+        setTiktok(await window.studio.tiktokSave(tiktokServer, tiktokKey));
+        setToTiktok(true);
+      }
+      setTiktokKey("");
+      setTiktokEditing(false);
     });
   const stopLive = () =>
     run("broadcast", async () => {
@@ -437,19 +475,31 @@ export default function App() {
   const livePending = isBusyState(broadcastState) || busy.includes("broadcast");
   const liveLabel =
     broadcastState === "liveConfirmed"
-      ? "Ao vivo · YouTube confirmado"
+      ? `Ao vivo · YouTube confirmado${toTiktok ? " · TikTok enviando" : ""}`
       : liveActive
-        ? mode === "key"
-          ? "Enviando · confira YouTube Studio"
-          : "Enviando · aguardando YouTube"
+        ? !toYoutube
+          ? "Enviando · confira o TikTok"
+          : mode === "key"
+            ? `Enviando · confira YouTube Studio${toTiktok ? " e TikTok" : ""}`
+            : `Enviando · aguardando YouTube${toTiktok ? " · TikTok" : ""}`
         : broadcastState === "error"
           ? "Falha na transmissão"
           : "Fora do ar";
+  const youtubeReady =
+    mode === "key"
+      ? streamKey.trim().length > 0
+      : youtube.connected && liveTitle.trim().length > 0;
   const canBroadcast =
     info?.ffmpeg === true &&
-    (mode === "key"
-      ? streamKey.trim().length > 0
-      : youtube.connected && liveTitle.trim().length > 0);
+    (toYoutube || toTiktok) &&
+    (!toYoutube || youtubeReady) &&
+    (!toTiktok || tiktok.saved);
+  const destinationLabel = [
+    toYoutube ? "YouTube" : "",
+    toTiktok ? "TikTok" : "",
+  ]
+    .filter(Boolean)
+    .join(" e ");
   const segmentationLabel = {
     off: "Fundo original",
     loading: "Preparando IA local…",
@@ -1610,249 +1660,410 @@ export default function App() {
             {panel === "destination" && (
               <>
                 <div className="panel-title">
-                  <h2>Próxima parada: YouTube.</h2>
+                  <h2>
+                    Próxima parada: {destinationLabel || "escolha o destino"}.
+                  </h2>
                   <p>Conecte, confira e entre ao vivo.</p>
                 </div>
-                <div className="connection-mode segmented">
-                  <button
-                    aria-pressed={mode === "oauth"}
-                    disabled={liveActive || livePending}
-                    onClick={() => setMode("oauth")}
-                  >
-                    Conta YouTube
-                  </button>
-                  <button
-                    aria-pressed={mode === "key"}
-                    disabled={liveActive || livePending}
-                    onClick={() => setMode("key")}
-                  >
-                    Chave de transmissão
-                  </button>
+                <div className="control-group">
+                  <div className="control-heading">
+                    <Radio size={17} />
+                    <h3>Enviar para</h3>
+                  </div>
+                  <div className="connection-mode segmented">
+                    <button
+                      aria-pressed={toYoutube}
+                      disabled={liveActive || livePending}
+                      onClick={() => setToYoutube((on) => !on)}
+                    >
+                      {toYoutube && <Check size={14} />} YouTube
+                    </button>
+                    <button
+                      aria-pressed={toTiktok}
+                      disabled={liveActive || livePending}
+                      onClick={() => setToTiktok((on) => !on)}
+                    >
+                      {toTiktok && <Check size={14} />} TikTok
+                    </button>
+                  </div>
+                  <p className="field-help">
+                    {toYoutube && toTiktok
+                      ? "O mesmo vídeo vai para os dois. Se um cair, o outro continua no ar."
+                      : "Marque os dois para transmitir ao mesmo tempo."}
+                  </p>
                 </div>
-                {mode === "oauth" ? (
+                {toTiktok && (
                   <div className="control-group">
                     <div className="control-heading">
-                      <Link size={17} />
-                      <h3>Sua conta</h3>
+                      <Radio size={17} />
+                      <h3>TikTok</h3>
                       <span
-                        className={`mini-status ${youtube.connected ? "on" : ""}`}
+                        className={`mini-status ${tiktok.saved ? "on" : ""}`}
                       >
-                        {youtube.connected ? "Conectada" : "Não conectada"}
+                        {tiktok.saved ? "Chave salva" : "Sem chave"}
                       </span>
                     </div>
-                    {youtube.connected ? (
+                    {tiktok.saved && !tiktokEditing ? (
                       <>
                         <div className="channel-card">
                           <span className="channel-icon">
                             <Radio size={20} />
                           </span>
                           <div>
-                            <strong>
-                              {youtube.channel || "Canal conectado"}
+                            <strong title={tiktok.server}>
+                              {tiktok.server}
                             </strong>
-                            <span>Autorização salva neste Windows</span>
+                            <span>Chave criptografada neste Windows</span>
                           </div>
                         </div>
+                        <p className="field-help">
+                          A chave do TikTok costuma mudar a cada live. Se mudou,
+                          troque antes de iniciar.
+                        </p>
+                        <button
+                          className="button secondary full"
+                          disabled={
+                            busy.includes("tiktok") || liveActive || livePending
+                          }
+                          onClick={() => {
+                            setTiktokServer(tiktok.server ?? "");
+                            setTiktokEditing(true);
+                          }}
+                        >
+                          Trocar chave
+                        </button>
                         <button
                           className="text-button"
-                          onClick={() => youtubeAction("disconnect")}
                           disabled={
-                            busy.includes("youtube") ||
-                            liveActive ||
-                            livePending
+                            busy.includes("tiktok") || liveActive || livePending
                           }
+                          onClick={() => tiktokAction("clear")}
                         >
-                          Desconectar conta
+                          Apagar chave salva
                         </button>
                       </>
                     ) : (
                       <>
-                        <p className="muted-copy">
-                          Autorize seu canal pelo navegador. A primeira conexão
-                          precisa de credenciais OAuth do Google.
-                        </p>
+                        <label className="field-label" htmlFor="tiktok-server">
+                          URL do servidor
+                        </label>
+                        <input
+                          id="tiktok-server"
+                          autoComplete="off"
+                          spellCheck={false}
+                          maxLength={300}
+                          value={tiktokServer}
+                          disabled={liveActive || livePending}
+                          onChange={(e) => setTiktokServer(e.target.value)}
+                          placeholder="rtmp://… (mostrada pelo TikTok)"
+                        />
+                        <label className="field-label" htmlFor="tiktok-key">
+                          Chave de transmissão
+                        </label>
+                        <input
+                          id="tiktok-key"
+                          type="password"
+                          autoComplete="off"
+                          spellCheck={false}
+                          maxLength={512}
+                          value={tiktokKey}
+                          disabled={liveActive || livePending}
+                          onChange={(e) => setTiktokKey(e.target.value)}
+                          placeholder="Cole a chave do TikTok"
+                        />
                         <button
                           className="button secondary full"
-                          onClick={() =>
-                            youtubeAction(
-                              youtube.configured ? "connect" : "configure",
-                            )
+                          disabled={
+                            busy.includes("tiktok") ||
+                            !tiktokServer.trim() ||
+                            !tiktokKey.trim() ||
+                            liveActive ||
+                            livePending
                           }
-                          disabled={busy.includes("youtube")}
+                          onClick={() => tiktokAction("save")}
                         >
-                          {busy.includes("youtube") ? (
+                          {busy.includes("tiktok") ? (
                             <LoaderCircle size={16} className="spin" />
                           ) : (
-                            <Link size={16} />
+                            <Check size={16} />
                           )}
-                          {youtube.configured
-                            ? "Conectar meu YouTube"
-                            : "Configurar conexão Google"}
+                          Salvar chave do TikTok
                         </button>
-                        {!youtube.configured && (
-                          <p className="field-help">
-                            Selecione o arquivo JSON de cliente OAuth para
-                            aplicativo desktop, obtido no Google Cloud. Ele
-                            permanece neste computador.
-                          </p>
-                        )}
-                        {youtube.configured && (
+                        {tiktok.saved && (
                           <button
                             className="text-button"
-                            disabled={busy.includes("youtube")}
-                            onClick={() => youtubeAction("configure")}
+                            onClick={() => {
+                              setTiktokKey("");
+                              setTiktokEditing(false);
+                            }}
                           >
-                            Trocar configuração OAuth
+                            Manter a chave salva
                           </button>
                         )}
+                        <p className="field-help">
+                          O TikTok mostra servidor e chave só para contas
+                          liberadas para transmitir por programa de PC. A chave
+                          fica criptografada neste Windows e não aparece de
+                          novo.
+                        </p>
                       </>
                     )}
-                    <label className="field-label" htmlFor="live-title">
-                      Título da transmissão
-                    </label>
-                    <input
-                      id="live-title"
-                      maxLength={100}
-                      value={liveTitle}
-                      disabled={liveActive || livePending}
-                      onChange={(e) => setLiveTitle(e.target.value)}
-                      placeholder="Sobre o que vamos conversar?"
-                    />
-                    <label className="field-label" htmlFor="live-description">
-                      Descrição da transmissão (opcional)
-                    </label>
-                    <textarea
-                      id="live-description"
-                      maxLength={5000}
-                      rows={3}
-                      value={liveDescription}
-                      disabled={liveActive || livePending}
-                      onChange={(e) => setLiveDescription(e.target.value)}
-                      placeholder="Detalhes ou recados que aparecerão no YouTube"
-                      className="field-textarea"
-                    />
-                    <label className="field-label" htmlFor="privacy">
-                      Visibilidade
-                    </label>
-                    <select
-                      id="privacy"
-                      value={privacy}
-                      disabled={liveActive || livePending}
-                      onChange={(e) =>
-                        setPrivacy(e.target.value as typeof privacy)
-                      }
-                    >
-                      <option value="unlisted">
-                        Não listada · só quem tem o link
-                      </option>
-                      <option value="private">Privada · teste reservado</option>
-                      <option value="public">
-                        Pública · disponível no canal
-                      </option>
-                    </select>
-                    <p className="field-help">
-                      O canal precisa ter a transmissão ao vivo ativada no
-                      YouTube.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="control-group">
-                    <div className="control-heading">
-                      <Radio size={17} />
-                      <h3>Enviar com chave</h3>
-                    </div>
-                    <label className="field-label" htmlFor="stream-key">
-                      Chave de transmissão
-                    </label>
-                    <input
-                      id="stream-key"
-                      type="password"
-                      autoComplete="off"
-                      spellCheck={false}
-                      value={streamKey}
-                      disabled={liveActive || livePending}
-                      onChange={(e) => setStreamKey(e.target.value)}
-                      placeholder="Cole a chave do YouTube Studio"
-                    />
-                    <p className="field-help">
-                      A chave fica apenas nesta sessão.
-                    </p>
                   </div>
                 )}
-                <div className="control-group">
-                  <div className="control-heading">
-                    <ImagePlus size={17} />
-                    <h3>Capa da transmissão</h3>
-                    {mode === "oauth" && (
-                      <span className={`mini-status ${cover ? "on" : ""}`}>
-                        {cover ? "Escolhida" : "Sem capa"}
-                      </span>
-                    )}
-                  </div>
-                  {mode === "oauth" ? (
-                    <>
-                      {cover ? (
-                        <figure className="cover-preview">
-                          <img
-                            src={cover.preview}
-                            alt="Prévia da capa da transmissão"
-                          />
-                          <figcaption title={cover.name}>
-                            {cover.name}
-                          </figcaption>
-                        </figure>
-                      ) : (
-                        <p className="muted-copy">
-                          A imagem aparece como miniatura da live no YouTube.
-                        </p>
-                      )}
+                {toYoutube && (
+                  <>
+                    <div className="connection-mode segmented">
                       <button
-                        className="button secondary full"
-                        disabled={
-                          busy.includes("cover") || liveActive || livePending
-                        }
-                        onClick={() => coverAction("choose")}
+                        aria-pressed={mode === "oauth"}
+                        disabled={liveActive || livePending}
+                        onClick={() => setMode("oauth")}
                       >
-                        <ImagePlus size={16} />
-                        {cover ? "Trocar capa" : "Escolher capa"}
+                        Conta YouTube
                       </button>
-                      {cover && (
-                        <button
-                          className="text-button"
-                          disabled={
-                            busy.includes("cover") || liveActive || livePending
-                          }
-                          onClick={() => coverAction("clear")}
+                      <button
+                        aria-pressed={mode === "key"}
+                        disabled={liveActive || livePending}
+                        onClick={() => setMode("key")}
+                      >
+                        Chave de transmissão
+                      </button>
+                    </div>
+                    {mode === "oauth" ? (
+                      <div className="control-group">
+                        <div className="control-heading">
+                          <Link size={17} />
+                          <h3>Sua conta</h3>
+                          <span
+                            className={`mini-status ${youtube.connected ? "on" : ""}`}
+                          >
+                            {youtube.connected ? "Conectada" : "Não conectada"}
+                          </span>
+                        </div>
+                        {youtube.connected ? (
+                          <>
+                            <div className="channel-card">
+                              <span className="channel-icon">
+                                <Radio size={20} />
+                              </span>
+                              <div>
+                                <strong>
+                                  {youtube.channel || "Canal conectado"}
+                                </strong>
+                                <span>Autorização salva neste Windows</span>
+                              </div>
+                            </div>
+                            <button
+                              className="text-button"
+                              onClick={() => youtubeAction("disconnect")}
+                              disabled={
+                                busy.includes("youtube") ||
+                                liveActive ||
+                                livePending
+                              }
+                            >
+                              Desconectar conta
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="muted-copy">
+                              Autorize seu canal pelo navegador. A primeira
+                              conexão precisa de credenciais OAuth do Google.
+                            </p>
+                            <button
+                              className="button secondary full"
+                              onClick={() =>
+                                youtubeAction(
+                                  youtube.configured ? "connect" : "configure",
+                                )
+                              }
+                              disabled={busy.includes("youtube")}
+                            >
+                              {busy.includes("youtube") ? (
+                                <LoaderCircle size={16} className="spin" />
+                              ) : (
+                                <Link size={16} />
+                              )}
+                              {youtube.configured
+                                ? "Conectar meu YouTube"
+                                : "Configurar conexão Google"}
+                            </button>
+                            {!youtube.configured && (
+                              <p className="field-help">
+                                Selecione o arquivo JSON de cliente OAuth para
+                                aplicativo desktop, obtido no Google Cloud. Ele
+                                permanece neste computador.
+                              </p>
+                            )}
+                            {youtube.configured && (
+                              <button
+                                className="text-button"
+                                disabled={busy.includes("youtube")}
+                                onClick={() => youtubeAction("configure")}
+                              >
+                                Trocar configuração OAuth
+                              </button>
+                            )}
+                          </>
+                        )}
+                        <label className="field-label" htmlFor="live-title">
+                          Título da transmissão
+                        </label>
+                        <input
+                          id="live-title"
+                          maxLength={100}
+                          value={liveTitle}
+                          disabled={liveActive || livePending}
+                          onChange={(e) => setLiveTitle(e.target.value)}
+                          placeholder="Sobre o que vamos conversar?"
+                        />
+                        <label
+                          className="field-label"
+                          htmlFor="live-description"
                         >
-                          Remover capa
-                        </button>
+                          Descrição da transmissão (opcional)
+                        </label>
+                        <textarea
+                          id="live-description"
+                          maxLength={5000}
+                          rows={3}
+                          value={liveDescription}
+                          disabled={liveActive || livePending}
+                          onChange={(e) => setLiveDescription(e.target.value)}
+                          placeholder="Detalhes ou recados que aparecerão no YouTube"
+                          className="field-textarea"
+                        />
+                        <label className="field-label" htmlFor="privacy">
+                          Visibilidade
+                        </label>
+                        <select
+                          id="privacy"
+                          value={privacy}
+                          disabled={liveActive || livePending}
+                          onChange={(e) =>
+                            setPrivacy(e.target.value as typeof privacy)
+                          }
+                        >
+                          <option value="unlisted">
+                            Não listada · só quem tem o link
+                          </option>
+                          <option value="private">
+                            Privada · teste reservado
+                          </option>
+                          <option value="public">
+                            Pública · disponível no canal
+                          </option>
+                        </select>
+                        <p className="field-help">
+                          O canal precisa ter a transmissão ao vivo ativada no
+                          YouTube.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="control-group">
+                        <div className="control-heading">
+                          <Radio size={17} />
+                          <h3>Enviar com chave</h3>
+                        </div>
+                        <label className="field-label" htmlFor="stream-key">
+                          Chave de transmissão
+                        </label>
+                        <input
+                          id="stream-key"
+                          type="password"
+                          autoComplete="off"
+                          spellCheck={false}
+                          value={streamKey}
+                          disabled={liveActive || livePending}
+                          onChange={(e) => setStreamKey(e.target.value)}
+                          placeholder="Cole a chave do YouTube Studio"
+                        />
+                        <p className="field-help">
+                          A chave fica apenas nesta sessão.
+                        </p>
+                      </div>
+                    )}
+                    <div className="control-group">
+                      <div className="control-heading">
+                        <ImagePlus size={17} />
+                        <h3>Capa da transmissão</h3>
+                        {mode === "oauth" && (
+                          <span className={`mini-status ${cover ? "on" : ""}`}>
+                            {cover ? "Escolhida" : "Sem capa"}
+                          </span>
+                        )}
+                      </div>
+                      {mode === "oauth" ? (
+                        <>
+                          {cover ? (
+                            <figure className="cover-preview">
+                              <img
+                                src={cover.preview}
+                                alt="Prévia da capa da transmissão"
+                              />
+                              <figcaption title={cover.name}>
+                                {cover.name}
+                              </figcaption>
+                            </figure>
+                          ) : (
+                            <p className="muted-copy">
+                              A imagem aparece como miniatura da live no
+                              YouTube.
+                            </p>
+                          )}
+                          <button
+                            className="button secondary full"
+                            disabled={
+                              busy.includes("cover") ||
+                              liveActive ||
+                              livePending
+                            }
+                            onClick={() => coverAction("choose")}
+                          >
+                            <ImagePlus size={16} />
+                            {cover ? "Trocar capa" : "Escolher capa"}
+                          </button>
+                          {cover && (
+                            <button
+                              className="text-button"
+                              disabled={
+                                busy.includes("cover") ||
+                                liveActive ||
+                                livePending
+                              }
+                              onClick={() => coverAction("clear")}
+                            >
+                              Remover capa
+                            </button>
+                          )}
+                          <p className="field-help">
+                            Recomendado 1280×720, JPG ou PNG, até 2 MB. Enviada
+                            ao YouTube quando a live começa; miniatura
+                            personalizada exige canal verificado.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="muted-copy">
+                            Com chave, o app não acessa sua conta: título,
+                            privacidade e capa ficam no YouTube Studio. Edite a
+                            transmissão lá e envie a miniatura.
+                          </p>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              run("external", () =>
+                                window.studio.openExternal("youtube-studio"),
+                              )
+                            }
+                          >
+                            Abrir YouTube Studio <ExternalLink size={13} />
+                          </button>
+                        </>
                       )}
-                      <p className="field-help">
-                        Recomendado 1280×720, JPG ou PNG, até 2 MB. Enviada ao
-                        YouTube quando a live começa; miniatura personalizada
-                        exige canal verificado.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="muted-copy">
-                        Com chave, o app não acessa sua conta: título,
-                        privacidade e capa ficam no YouTube Studio. Edite a
-                        transmissão lá e envie a miniatura.
-                      </p>
-                      <button
-                        className="text-button"
-                        onClick={() =>
-                          run("external", () =>
-                            window.studio.openExternal("youtube-studio"),
-                          )
-                        }
-                      >
-                        Abrir YouTube Studio <ExternalLink size={13} />
-                      </button>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </>
+                )}
                 <div className="control-group">
                   <div className="control-heading">
                     <FolderOpen size={17} />
@@ -2111,51 +2322,73 @@ export default function App() {
                 <h2 id="modal-title">Vamos entrar ao vivo?</h2>
                 <p>
                   Confira a saída. O vídeo e o áudio da composição serão
-                  enviados ao YouTube.
+                  enviados{" "}
+                  {toYoutube && toTiktok
+                    ? "ao YouTube e ao TikTok"
+                    : toTiktok
+                      ? "ao TikTok"
+                      : "ao YouTube"}
+                  .
                 </p>
                 <dl className="live-review">
-                  <div>
-                    <dt>Destino</dt>
-                    <dd>
-                      {mode === "oauth"
-                        ? youtube.channel || "Canal conectado"
-                        : "YouTube · chave de transmissão"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Título</dt>
-                    <dd>
-                      {mode === "oauth"
-                        ? liveTitle
-                        : "Definido no YouTube Studio"}
-                    </dd>
-                  </div>
-                  {mode === "oauth" && liveDescription.trim() && (
+                  {toYoutube && (
                     <div>
-                      <dt>Descrição</dt>
-                      <dd>{liveDescription.trim()}</dd>
+                      <dt>YouTube</dt>
+                      <dd>
+                        {mode === "oauth"
+                          ? youtube.channel || "Canal conectado"
+                          : "Chave de transmissão"}
+                      </dd>
                     </div>
                   )}
-                  <div>
-                    <dt>Visibilidade</dt>
-                    <dd>
-                      {mode === "key"
-                        ? "Confira no YouTube Studio"
-                        : {
-                            private: "Privada",
-                            unlisted: "Não listada",
-                            public: "Pública",
-                          }[privacy]}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Capa</dt>
-                    <dd>
-                      {mode === "key"
-                        ? "Definida no YouTube Studio"
-                        : cover?.name || "Sem capa"}
-                    </dd>
-                  </div>
+                  {toTiktok && (
+                    <div>
+                      <dt>TikTok</dt>
+                      <dd>
+                        {tiktok.saved
+                          ? "Chave salva · 16:9 horizontal"
+                          : "Sem chave salva"}
+                      </dd>
+                    </div>
+                  )}
+                  {toYoutube && (
+                    <>
+                      <div>
+                        <dt>Título</dt>
+                        <dd>
+                          {mode === "oauth"
+                            ? liveTitle
+                            : "Definido no YouTube Studio"}
+                        </dd>
+                      </div>
+                      {mode === "oauth" && liveDescription.trim() && (
+                        <div>
+                          <dt>Descrição</dt>
+                          <dd>{liveDescription.trim()}</dd>
+                        </div>
+                      )}
+                      <div>
+                        <dt>Visibilidade</dt>
+                        <dd>
+                          {mode === "key"
+                            ? "Confira no YouTube Studio"
+                            : {
+                                private: "Privada",
+                                unlisted: "Não listada",
+                                public: "Pública",
+                              }[privacy]}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Capa</dt>
+                        <dd>
+                          {mode === "key"
+                            ? "Definida no YouTube Studio"
+                            : cover?.name || "Sem capa"}
+                        </dd>
+                      </div>
+                    </>
+                  )}
                   <div>
                     <dt>Microfone</dt>
                     <dd>
@@ -2171,10 +2404,16 @@ export default function App() {
                     A tela de espera da composição será enviada.
                   </p>
                 )}
-                {mode === "key" && (
+                {toYoutube && mode === "key" && (
                   <p className="field-help">
                     Com chave, o aplicativo confirma o envio. Confira no YouTube
                     Studio quando a live estiver pública.
+                  </p>
+                )}
+                {toTiktok && (
+                  <p className="field-help">
+                    O TikTok não avisa o aplicativo: confira a live pelo app do
+                    TikTok. Título e capa são definidos lá.
                   </p>
                 )}
                 <div className="modal-actions">

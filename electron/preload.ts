@@ -17,6 +17,10 @@ const bridge: StudioBridge = {
   youtubeConnect: () => ipcRenderer.invoke("studio:youtube-connect"),
   youtubeDisconnect: () => ipcRenderer.invoke("studio:youtube-disconnect"),
   youtubeStatus: () => ipcRenderer.invoke("studio:youtube-status"),
+  tiktokStatus: () => ipcRenderer.invoke("studio:tiktok-status"),
+  tiktokSave: (server, key) =>
+    ipcRenderer.invoke("studio:tiktok-save", server, key),
+  tiktokClear: () => ipcRenderer.invoke("studio:tiktok-clear"),
   thumbnailChoose: () => ipcRenderer.invoke("studio:thumbnail-choose"),
   thumbnailClear: () => ipcRenderer.invoke("studio:thumbnail-clear"),
   openExternal: (target) => ipcRenderer.invoke("studio:open-external", target),

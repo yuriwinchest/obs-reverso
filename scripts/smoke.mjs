@@ -101,7 +101,7 @@ try {
     console.log(
       `Ensaio ${scenario.name}: ${scenario.seconds}s; saídas locais.`,
     );
-    await page.evaluate(async () => {
+    await page.evaluate(async (both) => {
       const canvas = document.createElement("canvas");
       canvas.width = 1280;
       canvas.height = 720;
@@ -168,7 +168,11 @@ try {
       });
       const recording = await window.studio.recordingStart();
       if (!recording) throw new Error("Modo smoke não dispensou o diálogo.");
-      const broadcast = await window.studio.broadcastStart({ mode: "key" });
+      const broadcast = await window.studio.broadcastStart({
+        mode: "key",
+        // Two destinations exercise the tee muxer (one fifo each).
+        tiktok: both,
+      });
       const createSink = (kind, id) => {
         const recorder = new MediaRecorder(stream, {
           mimeType: "video/webm;codecs=vp8,opus",
@@ -264,7 +268,7 @@ try {
           };
         },
       };
-    });
+    }, !scenario.failAt && !soak);
     const start = Date.now();
     let killed = false;
     const samples = [];
@@ -355,6 +359,17 @@ try {
       const livePath = path.join(artifacts, `${scenario.name}-live.flv`);
       await copyFile(path.join(artifacts, "smoke-live.flv"), livePath);
       files.push(await validateMedia(livePath, scenario.seconds - 1));
+      if (!soak) {
+        const tiktokPath = path.join(
+          artifacts,
+          `${scenario.name}-live-tiktok.flv`,
+        );
+        await copyFile(
+          path.join(artifacts, "smoke-live-tiktok.flv"),
+          tiktokPath,
+        );
+        files.push(await validateMedia(tiktokPath, scenario.seconds - 1));
+      }
     }
     result.scenarios.push({
       ...scenario,

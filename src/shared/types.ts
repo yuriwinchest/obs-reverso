@@ -88,6 +88,12 @@ export interface YouTubeStatus {
   configured: boolean;
   channel?: string;
 }
+export interface TikTokStatus {
+  available: boolean;
+  saved: boolean;
+  /** Ingest server only; the key is never sent back to the renderer. */
+  server?: string;
+}
 export interface StudioBridge {
   info(): Promise<{
     version: string;
@@ -105,6 +111,9 @@ export interface StudioBridge {
     title?: string;
     description?: string;
     privacy?: "private" | "unlisted" | "public";
+    /** Defaults to true, so older callers keep streaming to YouTube. */
+    youtube?: boolean;
+    tiktok?: boolean;
   }): Promise<{ id: string }>;
   broadcastAppend(id: string, seq: number, bytes: ArrayBuffer): Promise<void>;
   broadcastStop(id: string): Promise<void>;
@@ -112,6 +121,9 @@ export interface StudioBridge {
   youtubeConnect(): Promise<YouTubeStatus>;
   youtubeDisconnect(): Promise<void>;
   youtubeStatus(): Promise<YouTubeStatus>;
+  tiktokStatus(): Promise<TikTokStatus>;
+  tiktokSave(server: string, key: string): Promise<TikTokStatus>;
+  tiktokClear(): Promise<TikTokStatus>;
   thumbnailChoose(): Promise<{ name: string; preview: string } | null>;
   thumbnailClear(): Promise<void>;
   openExternal(target: "youtube-studio" | "recordings"): Promise<void>;

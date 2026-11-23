@@ -13,31 +13,101 @@ export const QUEUE_DEADLINE_MS = 15000;
  * live after 8 s), and it reconnects to the ingest by itself. A wrong key
  * still fails after the recovery attempts run out (~1 min).
  */
-export function broadcastOutputArgs(destination: string) {
-  return [
-    "-f",
-    "fifo",
-    "-fifo_format",
-    "flv",
-    "-format_opts",
-    "flvflags=no_duration_filesize",
-    "-queue_size",
-    "1200",
-    "-drop_pkts_on_overflow",
-    "1",
-    "-attempt_recovery",
-    "1",
-    "-recover_any_error",
-    "1",
-    "-max_recovery_attempts",
-    "30",
-    "-recovery_wait_time",
-    "2",
-    "-restart_with_keyframe",
-    "1",
-    "-y",
-    destination,
-  ];
+const FIFO_OPTIONS: Array<[string, string]> = [
+  ["fifo_format", "flv"],
+  ["format_opts", "flvflags=no_duration_filesize"],
+  ["queue_size", "1200"],
+  ["drop_pkts_on_overflow", "1"],
+  ["attempt_recovery", "1"],
+  ["recover_any_error", "1"],
+  ["max_recovery_attempts", "30"],
+  ["recovery_wait_time", "2"],
+  ["restart_with_keyframe", "1"],
+];
+/**
+ * Several destinations share one encode through the tee muxer. Each one gets
+ * its own fifo (own queue, own reconnect) and `onfail=ignore`, so TikTok
+ * giving up never takes YouTube down with it. FFmpeg ends only when every
+ * destination has failed.
+ */
+export function broadcastOutputArgs(destinations: string | string[]) {
+  const list = typeof destinations === "string" ? [destinations] : destinations;
+  if (list.length === 0) throw new Error("Escolha ao menos um destino.");
+  if (list.length === 1)
+    return [
+      "-f",
+      "fifo",
+      ...FIFO_OPTIONS.flatMap(([name, value]) => [`-${name}`, value]),
+      "-y",
+      list[0],
+    ];
+  const slave = [
+    "f=fifo",
+    ...FIFO_OPTIONS.map(([name, value]) => `${name}=${value}`),
+    "onfail=ignore",
+  ].join(":");
+  for (const url of list)
+    // The tee list syntax treats these as separators or escapes.
+    // Inner spaces (local smoke paths) survive; the platform URLs have none.
+    if (/[|[\]\\'\r\n\t]/.test(url) || url.trim() !== url)
+      throw new Error("Destino de transmissão com caractere não permitido.");
+  return ["-f", "tee", list.map((url) => `[${slave}]${url}`).join("|")];
+}
+const TIKTOK_DOMAINS = [
+  "tiktok.com",
+  "tiktokcdn.com",
+  "tiktokcdn-us.com",
+  "tiktokcdn-eu.com",
+  "tiktokv.com",
+];
+/**
+ * TikTok hands each eligible account its own ingest server and a key that
+ * changes per live. The server is accepted only on TikTok-owned domains,
+ * plain rtmp included because that is what TikTok usually shows.
+ */
+export function tiktokDestination(key: unknown, address: unknown): string {
+  if (
+    typeof key !== "string" ||
+    !/^[A-Za-z0-9_\-.~?=&%]{8,512}$/.test(key.trim())
+  )
+    throw new Error("Chave do TikTok inválida.");
+  if (typeof address !== "string" || address.trim().length > 300)
+    throw new Error("Servidor do TikTok não permitido.");
+  let url: URL;
+  try {
+    url = new URL(address.trim());
+  } catch {
+    throw new Error("Servidor do TikTok não permitido.");
+  }
+  const host = url.hostname.toLowerCase();
+  if (
+    !["rtmp:", "rtmps:"].includes(url.protocol) ||
+    !/^[a-z0-9.-]+$/.test(host) ||
+    !TIKTOK_DOMAINS.some(
+      (domain) => host === domain || host.endsWith(`.${domain}`),
+    ) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !["", "1935", "443"].includes(url.port) ||
+    !/^(\/[A-Za-z0-9_\-.]+)*\/?$/.test(url.pathname)
+  )
+    throw new Error("Servidor do TikTok não permitido.");
+  return `${url.toString().replace(/\/$/, "")}/${key.trim()}`;
+}
+export type BroadcastTarget = { url: string; label: "YouTube" | "TikTok" };
+/** Re-checks every destination right before FFmpeg receives it. */
+export function checkTarget(target: BroadcastTarget) {
+  const split = target.url.lastIndexOf("/");
+  const key = target.url.slice(split + 1);
+  const address = target.url.slice(0, split);
+  const rebuilt =
+    target.label === "YouTube"
+      ? youtubeDestination(key, address)
+      : tiktokDestination(key, address);
+  if (rebuilt !== target.url)
+    throw new Error("Servidor de transmissão não permitido.");
 }
 export function youtubeDestination(
   key: unknown,
@@ -303,16 +373,17 @@ export class Outputs {
     })();
     return current.finishing;
   }
-  startBroadcast(destination: string, smoke = false) {
+  startBroadcast(targets: BroadcastTarget[], smoke = false) {
     if (this.broadcast)
       throw new Error("Já existe uma transmissão em andamento.");
-    if (!smoke) {
-      const split = destination.lastIndexOf("/");
-      youtubeDestination(
-        destination.slice(split + 1),
-        destination.slice(0, split),
-      );
-    }
+    if (targets.length === 0 || targets.length > 2)
+      throw new Error("Escolha YouTube, TikTok ou os dois.");
+    if (new Set(targets.map((target) => target.label)).size !== targets.length)
+      throw new Error("Destino repetido.");
+    if (!smoke) targets.forEach(checkTarget);
+    const labels = targets.map((target) => target.label);
+    const alive = new Set(labels);
+    const outputArgs = broadcastOutputArgs(targets.map((target) => target.url));
     const args = [
       "-hide_banner",
       "-loglevel",
@@ -362,7 +433,7 @@ export class Outputs {
       "pipe:1",
       "-stats_period",
       "0.5",
-      ...broadcastOutputArgs(destination),
+      ...outputArgs,
     ];
     const child = spawn(this.ffmpeg, args, {
       windowsHide: true,
@@ -399,10 +470,30 @@ export class Outputs {
     child.stdin.on("error", fail);
     // FFmpeg diagnostics may contain the full ingestion URL; never forward them.
     // Only the fact that an error line arrived is used (the fifo muxer logs one
-    // per failed connection attempt); the text itself is dropped.
-    child.stderr.on("data", () => {
+    // per failed connection attempt), plus the tee slave index when one
+    // destination gives up; the text itself is dropped right here.
+    let diagnostics = "";
+    child.stderr.on("data", (data) => {
       if (current.stopping) return;
       current.lastNetError = Date.now();
+      diagnostics = (diagnostics + data.toString()).slice(-4096);
+      const lost = /Slave muxer #(\d+) failed/.exec(diagnostics);
+      if (lost) {
+        diagnostics = diagnostics.slice(lost.index + lost[0].length);
+        // Tee keeps the original slave numbering even after one fails.
+        const gone = labels[Number(lost[1])];
+        if (gone) alive.delete(gone);
+        const rest = [...alive];
+        if (gone && rest.length) {
+          this.emit({
+            kind: "broadcast",
+            state: "sending",
+            message: `${gone} desistiu após várias tentativas. ${rest.join(" e ")} continua no ar; para voltar ao ${gone}, encerre e inicie de novo.`,
+          });
+          current.reconnecting = false;
+          return;
+        }
+      }
       if (current.sending && !current.reconnecting && !smoke) {
         current.reconnecting = true;
         this.emit({
@@ -433,7 +524,11 @@ export class Outputs {
             state: "sending",
             message: smoke
               ? "Encoder em ensaio local."
-              : "Sinal enviado. Confirme o recebimento no YouTube Studio.",
+              : `Sinal enviado. Confirme o recebimento no ${[...alive]
+                  .map((label) =>
+                    label === "YouTube" ? "YouTube Studio" : "app do TikTok",
+                  )
+                  .join(" e no ")}.`,
           });
         }
       if (progress.length > 8192) progress = "";

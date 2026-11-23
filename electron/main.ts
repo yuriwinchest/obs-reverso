@@ -12,8 +12,9 @@ import {
 import { existsSync } from "node:fs";
 import { readFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { Outputs, youtubeDestination } from "./outputs";
+import { Outputs, youtubeDestination, type BroadcastTarget } from "./outputs";
 import { YouTube } from "./youtube";
+import { TikTokKey } from "./tiktokKey";
 import {
   applyThumbnail,
   maxThumbnailBytes,
@@ -28,6 +29,7 @@ let window: BrowserWindow;
 let selectedScreen: string | null = null;
 let outputs: Outputs;
 let youtube: YouTube;
+let tiktok: TikTokKey;
 let closing = false;
 let canClose = false;
 let acknowledgeClose: (() => void) | null = null;
@@ -169,6 +171,11 @@ app.whenReady().then(async () => {
     encrypt: (value) => safeStorage.encryptString(value),
     decrypt: (value) => safeStorage.decryptString(value),
     open: (url) => shell.openExternal(url),
+  });
+  tiktok = new TikTokKey(path.join(app.getPath("userData"), "credentials"), {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (value) => safeStorage.encryptString(value),
+    decrypt: (value) => safeStorage.decryptString(value),
   });
   outputs = new Outputs(ffmpeg, (status) => {
     emit(status);
@@ -317,13 +324,22 @@ app.whenReady().then(async () => {
       throw new Error("Uma transmissão já está em andamento.");
     if (!options || typeof options !== "object")
       throw new Error("Revise as opções da transmissão.");
-    const { mode, key, title, description, privacy } = options as Record<
-      string,
-      unknown
-    >;
+    const {
+      mode,
+      key,
+      title,
+      description,
+      privacy,
+      youtube: toYoutube = true,
+      tiktok: toTiktok = false,
+    } = options as Record<string, unknown>;
     if (mode !== "key" && mode !== "oauth")
       throw new Error("Modo de conexão inválido.");
-    const cover = mode === "oauth" ? thumbnail : null;
+    if (typeof toYoutube !== "boolean" || typeof toTiktok !== "boolean")
+      throw new Error("Revise os destinos da transmissão.");
+    if (!toYoutube && !toTiktok)
+      throw new Error("Escolha YouTube, TikTok ou os dois.");
+    const cover = toYoutube && mode === "oauth" ? thumbnail : null;
     startingBroadcast = true;
     let finishStart!: () => void;
     broadcastStartDone = new Promise<void>((resolve) => {
@@ -333,29 +349,45 @@ app.whenReady().then(async () => {
     try {
       if (!existsSync(ffmpeg))
         throw new Error("O encoder FFmpeg não foi encontrado.");
-      let destination: string;
+      const targets: BroadcastTarget[] = [];
       if (process.env.OBS_REVERSO_SMOKE === "1" && !app.isPackaged) {
         const directory = path.join(app.getAppPath(), "artifacts");
         await mkdir(directory, { recursive: true });
-        destination = path.join(directory, "smoke-live.flv");
-      } else if (mode === "key") destination = youtubeDestination(key);
-      else {
-        if (
-          typeof title !== "string" ||
-          !["private", "unlisted", "public"].includes(String(privacy)) ||
-          (description !== undefined && typeof description !== "string")
-        )
-          throw new Error("Revise título, descrição e privacidade.");
-        prepared = await youtube.prepare(
-          title,
-          privacy as "private" | "unlisted" | "public",
-          description,
-        );
-        destination = youtubeDestination(prepared.key, prepared.address);
+        // Forward slashes: the tee list syntax would eat Windows backslashes.
+        const file = (name: string) =>
+          path.join(directory, name).replace(/\\/g, "/");
+        if (toYoutube)
+          targets.push({ url: file("smoke-live.flv"), label: "YouTube" });
+        if (toTiktok)
+          targets.push({ url: file("smoke-live-tiktok.flv"), label: "TikTok" });
+      } else {
+        // Read before any YouTube preparation, so a missing TikTok key never
+        // leaves a half-created broadcast in YouTube Studio.
+        const tiktokUrl = toTiktok ? await tiktok.destination() : null;
+        if (toYoutube && mode === "key")
+          targets.push({ url: youtubeDestination(key), label: "YouTube" });
+        else if (toYoutube) {
+          if (
+            typeof title !== "string" ||
+            !["private", "unlisted", "public"].includes(String(privacy)) ||
+            (description !== undefined && typeof description !== "string")
+          )
+            throw new Error("Revise título, descrição e privacidade.");
+          prepared = await youtube.prepare(
+            title,
+            privacy as "private" | "unlisted" | "public",
+            description,
+          );
+          targets.push({
+            url: youtubeDestination(prepared.key, prepared.address),
+            label: "YouTube",
+          });
+        }
+        if (tiktokUrl) targets.push({ url: tiktokUrl, label: "TikTok" });
       }
       if (closing) throw new Error("O aplicativo está encerrando.");
       const result = outputs.startBroadcast(
-        destination,
+        targets,
         process.env.OBS_REVERSO_SMOKE === "1" && !app.isPackaged,
       );
       broadcastSession = {
@@ -434,6 +466,18 @@ app.whenReady().then(async () => {
     return youtube.disconnect();
   });
   handle("youtube-status", () => youtube.status());
+  handle("tiktok-status", () => tiktok.status());
+  handle("tiktok-save", (server: unknown, key: unknown) => {
+    if (startingBroadcast || broadcastSession)
+      throw new Error("Encerre a transmissão antes de trocar a chave.");
+    return tiktok.save(server, key);
+  });
+  handle("tiktok-clear", async () => {
+    if (startingBroadcast || broadcastSession)
+      throw new Error("Encerre a transmissão antes de apagar a chave.");
+    await tiktok.clear();
+    return tiktok.status();
+  });
   handle("thumbnail-choose", async () => {
     if (startingBroadcast || broadcastSession)
       throw new Error("Encerre a transmissão antes de trocar a capa.");
