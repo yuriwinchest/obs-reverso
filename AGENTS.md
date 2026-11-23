@@ -21,6 +21,10 @@ devem ser lidos na ordem que o projeto determinar.
 - Nunca registre senha, token, conteúdo de `.env`, dado pessoal ou instrução de acesso à produção.
 
 <!-- VPS-HOSTINGER-MCP:INICIO (bloco gerenciado; fonte: D:\Projetos\VPS-HOSTINGER-MCP.md; editar lá e rodar D:\Projetos\aplicar-aviso-vps.ps1) -->
+## Versão do instalador (OBS Reverso)
+
+- Todo instalador novo entregue ao Yuri sobe a versão em um passo (`npm version 0.1.N --no-git-tag-version`: 0.1.2, 0.1.3, 0.1.4...) antes do `npm run package`. Decisão do Yuri em 2026-11-22, porque todo Setup saía 0.1.0 e ele não sabia qual estava instalado.
+
 ## Infraestrutura: VPS Hostinger e MCP (vale para todos os projetos do Yuri)
 
 - Todos os projetos de `D:\Projetos\Pessoal` e `D:\Projetos\Clientes` estão ou serão hospedados na **mesma VPS Hostinger** do Yuri. Antes de propor outro provedor ou servidor, considerar essa VPS.
