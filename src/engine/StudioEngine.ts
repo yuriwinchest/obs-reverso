@@ -7,6 +7,7 @@ import {
 import { framingMatrix } from "./framing";
 import { computePipRect } from "./pip";
 import { computePresentationBoxes } from "./layout";
+import { STALL_MS, allowRestart } from "./segmentationRecovery";
 
 function videoElement(stream: MediaStream) {
   const video = document.createElement("video");
@@ -91,6 +92,7 @@ export class StudioEngine {
   private cameraGeneration = 0;
   private micGeneration = 0;
   private maskTime = 0;
+  private restarts: number[] = [];
   private layer = document.createElement("canvas");
   private small = document.createElement("canvas");
   constructor(
@@ -364,14 +366,17 @@ export class StudioEngine {
     const wasMuted = this.config.muted;
     this.config = { ...this.config, ...patch };
     this.syncGains();
+    // Picking a background (or toggling the cut-out) after a failure is the
+    // user asking to try again, even when the cut-out kept the AI "needed".
     if (
-      !neededMask &&
+      (!neededMask || "background" in patch || "pipCutout" in patch) &&
       this.needsMask() &&
       this.metrics.segmentation === "error"
     ) {
       this.worker?.terminate();
       this.worker = null;
       this.pending = false;
+      this.restarts = [];
     }
     if (wasMuted !== this.config.muted) void this.syncMicDevice();
     if (patch.imageUrl !== undefined && oldImage !== patch.imageUrl) {
@@ -426,6 +431,8 @@ export class StudioEngine {
         return;
       }
       if (data.type === "ready") {
+        // The stall clock starts now, so a worker that never answers is caught.
+        this.maskTime = performance.now();
         this.metrics.segmentation = "ready";
         this.emit();
       }
@@ -460,6 +467,7 @@ export class StudioEngine {
     });
   }
   retrySegmentation() {
+    this.restarts = [];
     this.worker?.terminate();
     this.worker = null;
     this.mask?.close();
@@ -626,18 +634,22 @@ export class StudioEngine {
       layerCtx.clearRect(0, 0, w, h);
       if (
         this.needsMask() &&
-        this.mask &&
-        now - this.maskTime >= 2000 &&
+        now - this.maskTime >= STALL_MS &&
         this.metrics.segmentation === "ready"
       ) {
-        this.metrics.segmentation = "error";
         this.worker?.terminate();
         this.worker = null;
         this.pending = false;
-        this.onError(
-          "A IA deixou de acompanhar a câmera. O vídeo voltou ao fundo original; selecione Original e tente o efeito novamente.",
-        );
-        this.emit();
+        this.mask?.close();
+        this.mask = null;
+        if (allowRestart(this.restarts, now)) this.ensureSegmenter();
+        else {
+          this.metrics.segmentation = "error";
+          this.onError(
+            "A IA do fundo travou várias vezes em um minuto, provavelmente o PC está sobrecarregado. O vídeo segue sem efeito; escolha um fundo para tentar de novo.",
+          );
+          this.emit();
+        }
       }
       const effect =
         this.needsMask() && this.mask && now - this.maskTime < 2000;
